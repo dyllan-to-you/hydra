@@ -19,8 +19,9 @@ class Indicator(AIndicator):
         self.period = period
 
     def get_indexes(self, timespan):
-        min_idx = np.argmin([p["Low"] for p in timespan])
-        max_idx = np.argmax([p["High"] for p in timespan])
+        reversed = timespan[::-1]
+        min_idx = np.argmin([p["Low"] for p in reversed])
+        max_idx = np.argmax([p["High"] for p in reversed])
         return min_idx, max_idx
 
     def get_line(self, period, idx) -> float:
@@ -28,7 +29,7 @@ class Indicator(AIndicator):
 
     def get_timespan(self, price, history):
         period: int = self.period if len(history) >= self.period else len(history) + 1
-        timespan = ([price] + history)[:period]
+        timespan = (history + [price])[-period:]
         return period, timespan
 
     def calc(self, price, history: List[Price]) -> Output:

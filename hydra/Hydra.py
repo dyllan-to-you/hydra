@@ -1,33 +1,41 @@
-from hydra.Strategy import Strategy
 import pandas as pd
 from pandas.core.frame import DataFrame
-from hydra.types import DecisionEvent, Price
+from hydra.types import Price
 import itertools
 from typing import Dict, List, Set, Union
-from hydra.indicators.types import Decision, Indicator
+from hydra.strategies import Strategy
+from hydra.indicators import Decision, Indicator
 from hydra.utils import flatten
 
 
 class Hydra:
-    history: List[Dict] = []
-    decisions: List[Decision] = []
+    price_history: List[Dict]
+    decisions: List[Decision]
     # Key is priority, Value is List of Indicators
-    indicators: Dict[int, List[Indicator]] = {}
+    indicators: Dict[int, List[Indicator]]
     indicator_set: Set
     strategy: Strategy
 
     def __init__(
         self,
         strategy: Strategy,
-        indicators: Union[List[Indicator], Indicator],
+        indicators: Union[List[Indicator], Indicator] = None,
+        name: str = "",
+        fee: float = 0,
     ):
+        self.price_history = []
+        self.decisions = []
+        self.indicators = {}
+        self.fee = fee
+        self.name = name
+        self.indicator_set = set()
         self.set_strategy(strategy)
         self.add_indicators(indicators)
 
     def set_strategy(self, strategy):
         # Get dependent indicators w/parameters & set for Hydra
         self.add_indicators(strategy.init_indicators())
-        pass
+        self.strategy = strategy
 
     def add_indicators(
         self,
@@ -36,7 +44,7 @@ class Hydra:
         if isinstance(indicators, list):
             for indicator in indicators:
                 self.add_indicator(indicator)
-        else:
+        elif indicators is not None:
             self.add_indicator(indicators)
 
     def add_indicator(self, indicator: Indicator):
@@ -49,17 +57,19 @@ class Hydra:
         return itertools.chain(*self.indicators.values())
 
     @property
-    def history_df(self) -> DataFrame:
-        return pd.json_normalize(self.history)
+    def price_history_df(self) -> DataFrame:
+        df = pd.json_normalize(self.price_history)
+        df.set_index("Date", inplace=True)
+        return df
 
     # add new price
     def feed(self, food: Price):
         price = food._asdict()
         for indicator in self.prioritized_indicators:
-            price |= indicator.calculate(price, self.history)
+            price |= indicator.calculate(price, self.price_history)
 
-        self.history.append(price)
+        self.price_history.append(price)
 
-        decision = self.strategy.decide(self.history)
+        decision = self.strategy.decide(self.price_history)
 
         return decision

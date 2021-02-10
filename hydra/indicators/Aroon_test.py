@@ -82,7 +82,7 @@ def test_aroon_chart():
             )
             hydra.feed(price)
 
-        data = hydra.history_df
+        data = hydra.price_history_df
         data = data.rename(
             columns={
                 "Volume": btcvol,

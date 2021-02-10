@@ -34,7 +34,7 @@ def test_heikin_ashi_chart():
             )
             hydra.feed(price)
 
-        data = hydra.history_df
+        data = hydra.price_history_df
         data.set_index("Date", inplace=True)
 
         filter_col = [col for col in data if col.startswith(HeikinAshi.NAME)]

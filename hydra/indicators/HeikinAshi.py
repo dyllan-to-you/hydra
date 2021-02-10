@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import List, NamedTuple
-from .types import Indicator as AIndicator
+from . import Indicator as AIndicator
 from hydra.types import Price
 
 NAME = "heikin-ashi"
@@ -15,10 +15,10 @@ class Output(NamedTuple):
 
 
 class Indicator(AIndicator):
-    name = NAME
-
-    def __init__(self, period=1):
+    def __init__(self, period=1, **kwargs):
         self.period = period
+        self.name = f"{NAME}({self.period})"
+        super().__init__(**kwargs)
 
     def calc(self, price: Price, history: List[Price]) -> Output:
         try:

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import List, NamedTuple
-from .types import Indicator as AIndicator
+from . import Indicator as AIndicator
 from hydra.types import Price
 
 
@@ -11,16 +11,17 @@ class Output(NamedTuple):
     oscillator: float
 
 
-name = "aroon"
+NAME = "aroon"
 
 
 class Indicator(AIndicator):
     period: int
     tier: int
 
-    def __init__(self, period=25):
+    def __init__(self, period=25, **kwargs):
         self.period = period
         self.name = f"aroon({self.period})"
+        super().__init__(**kwargs)
 
     def get_indexes(self, timespan):
         reversed = timespan[::-1]

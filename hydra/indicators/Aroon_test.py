@@ -22,7 +22,7 @@ def test_aroon():
         history = []
         aroon = Aroon.Indicator()
         prices = DictReader(file)
-        for idx, row in tqdm(enumerate(prices)):
+        for idx, row in enumerate(prices):
             price = Price(
                 parser.parse(cast(str, row.get("date"))),
                 float(cast(str, row.get("open"))),
@@ -55,7 +55,7 @@ def test_aroon():
             history.insert(0, price | calculate)
 
 
-@pytest.mark.skip(reason="Not Focused")
+# @pytest.mark.skip(reason="Not Focused")
 def test_aroon_chart():
     btcvol = "Volume BTC"
 
@@ -65,7 +65,8 @@ def test_aroon_chart():
             "../../data/Bitfinex_BTCUSD_1h.test.csv",
         )
     ) as file:
-        hydra = Hydra([Aroon.Indicator()])
+        indicators = [Aroon.Indicator((i + 1) * 5) for i, x in enumerate([0] * 9)]
+        hydra = Hydra(indicators)
         prices = DictReader(file)
         for idx, row in enumerate(prices):
             if idx > 8760:
@@ -90,24 +91,36 @@ def test_aroon_chart():
         )
 
         data.set_index("Date", inplace=True)
-        aroon = [
-            mpf.make_addplot(data["aroon.up"], color="green", panel=1),
-            mpf.make_addplot(data["aroon.down"], color="red", panel=1),
-            # mpf.make_addplot(
-            #     data["aroon.oscillator"],
-            #     ylabel="Aroon Oscillator",
-            #     color="grey",
-            #     panel=2,
-            #     secondary_y=True,
-            # ),
-            # mpf.make_addplot(
-            #     data[btcvol],
-            #     panel=1,
-            #     color="yellow",
-            #     ylabel="BTC Vol.",
-            #     linestyle="dotted",
-            #     secondary_y="auto",
-            # ),
-        ]
+        charts = []
+        for idx, indicator in enumerate(indicators):
+            charts.append(
+                mpf.make_addplot(
+                    data[f"{indicator.name}.up"], color="green", panel=idx + 1
+                )
+            )
+            charts.append(
+                mpf.make_addplot(
+                    data[f"{indicator.name}.down"], color="red", panel=idx + 1
+                )
+            )
+        # aroon = [
+        #     mpf.make_addplot(data[f"aroon.up"], color="green", panel=1),
+        #     mpf.make_addplot(data["aroon.down"], color="red", panel=1),
+        #     # mpf.make_addplot(
+        #     #     data["aroon.oscillator"],
+        #     #     ylabel="Aroon Oscillator",
+        #     #     color="grey",
+        #     #     panel=2,
+        #     #     secondary_y=True,
+        #     # ),
+        #     # mpf.make_addplot(
+        #     #     data[btcvol],
+        #     #     panel=1,
+        #     #     color="yellow",
+        #     #     ylabel="BTC Vol.",
+        #     #     linestyle="dotted",
+        #     #     secondary_y="auto",
+        #     # ),
+        # ]
 
-        mpf.plot(data, type="candle", datetime_format="%Y-%m-%d", addplot=aroon)
+        mpf.plot(data, type="candle", datetime_format="%Y-%m-%d %H:%M", addplot=charts)

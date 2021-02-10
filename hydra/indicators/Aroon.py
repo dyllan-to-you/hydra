@@ -11,12 +11,16 @@ class Output(NamedTuple):
     oscillator: float
 
 
+name = "aroon"
+
+
 class Indicator(AIndicator):
-    name = "aroon"
     period: int
+    tier: int
 
     def __init__(self, period=25):
         self.period = period
+        self.name = f"aroon({self.period})"
 
     def get_indexes(self, timespan):
         reversed = timespan[::-1]

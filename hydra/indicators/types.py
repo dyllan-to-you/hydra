@@ -4,11 +4,6 @@ from enum import Enum
 from typing import Dict, List, NamedTuple, Tuple, TypedDict
 
 
-class Decision(Enum):
-    BUY = 1
-    SELL = -1
-
-
 class Trade(TypedDict):
     decision: Decision
     timestamp: datetime
@@ -17,7 +12,6 @@ class Trade(TypedDict):
 
 class Indicator(ABC):
     name: str
-    fields: List[Tuple[str]]
     tier: int = 0
 
     @abstractmethod

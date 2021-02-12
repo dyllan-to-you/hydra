@@ -48,7 +48,8 @@ class Strategy(ABC):
                 {"timestamp": price_history[-1]["Date"], "decision": decision}
             )
 
-        return decision
+            return decision
+        return Decision.NONE
 
     @abstractmethod
     def _decide(self, price_history) -> Decision:

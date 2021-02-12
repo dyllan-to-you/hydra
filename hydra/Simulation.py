@@ -1,6 +1,7 @@
 from datetime import datetime
 from hydra.strategies import Decision, DecisionEvent
 import os
+import numpy as np
 import pandas as pd
 from csv import DictReader
 from typing import List, NamedTuple, TypedDict, cast
@@ -77,131 +78,54 @@ class Simulation:
             self.cash *= trade["pl"] * fee
             trade["profit"] *= trade["pl"] * fee
 
-    # def run(
-    #     self,
-    #     year=None,
-    # ):
-    #     with open(
-    #         os.path.join(
-    #             os.path.dirname(os.path.realpath(__file__)),
-    #             "../data/Bitfinex_BTCUSD_1h.test.csv",
-    #         )
-    #     ) as file:
-    #         prices = DictReader(file)
-    #         for idx, row in tqdm(enumerate(prices), desc="Processing Time"):
-    #             if year is not None and (idx < year * 8760 or idx >= (year + 1) * 8760):
-    #                 continue
 
-    #             price: Price = {
-    #                 "Date": parser.parse(cast(str, row.get("date"))),
-    #                 "Open": float(cast(str, row.get("open"))),
-    #                 "High": float(cast(str, row.get("high"))),
-    #                 "Low": float(cast(str, row.get("low"))),
-    #                 "Close": float(cast(str, row.get("close"))),
-    #                 "Volume": float(cast(str, row.get("Volume BTC"))),
-    #                 "Volume_USD": float(cast(str, row.get("Volume USD"))),
-    #             }
-
-    #             self.tick(price)
-
-    # for hydra in self.hydras:
-    #     decision_history = hydra.strategy.decision_history_df
-    #     priced_decisions = hydra.price_history_df.join(
-    #         decision_history, how="right"
-    #     )
-
-    #     buy_decision = None
-    #     cash = 1
-    #     history = []
-    #     for index, row in priced_decisions.iterrows():
-    #         if buy_decision is None:
-    #             cash *= 1 - (hydra.fee / 100)
-    #             buy_decision = row
-    #             continue
-
-    #         buy = pick_price(
-    #             buy_decision, Decision.BUY, name=hydra.strategy.indicator.name
-    #         )
-    #         sell = pick_price(
-    #             row, Decision.SELL, name=hydra.strategy.indicator.name
-    #         )
-
-    #         pl = sell / buy
-    #         cash *= pl
-    #         cash *= 1 - (hydra.fee / 100)
-
-    #         history.append((pl, cash))
-
-    #         buy_decision = None
-    #         pass
-
-    #     res.append(
-    #         {
-    #             "name": hydra.name,
-    #             "strategy": hydra.strategy.name,
-    #             "Total": history[-1][1],
-    #             "Transactions": len(history),
-    #         }
-    #     )
-    # return res
-
-
-result = []
-simulations = []
-for i in range(1, 25):
-    period = i * 2
-    # Hydra(AroonStrategy(period), name="free trade"),
-    # Hydra(AroonStrategy(period), name="kraken (taker)", fee=0.26),
-    # Hydra(AroonStrategy(period), name="kraken (maker)", fee=0.16),
-    simulations.append(
-        Simulation(Hydra(AroonStrategy(period), name="binance", fee=0.06))
-    )
-    # [
-    #     "binance(pro)",
-    #     period,
-    #     Simulation(Hydra(AroonStrategy(period)), fee=0.075),
-    # ],
-    # [
-    #     "binance(pro + ref)",
-    #     period,
-    #     Simulation(Hydra(AroonStrategy(period)), fee=0.075 * 0.8),
-    # ],
-
-    # result.extend(sim.run(1, pick_price_last_peak))
-    # result.extend(sim.run(2, pick_price_last_peak))
-with pd.option_context("display.max_rows", None, "display.max_columns", None):
+def run_sim(rangeStart=0, rangeEnd=2.5):
     result = []
-    year = 2
-    with open(
-        os.path.join(
-            os.path.dirname(os.path.realpath(__file__)),
-            "../data/Bitfinex_BTCUSD_1h.test.csv",
+    simulations = []
+    for i in range(1, 25):
+        period = i * 2
+        simulations.append(
+            Simulation(Hydra(AroonStrategy(period), name="binance", fee=0.06))
         )
-    ) as file:
-        prices = DictReader(file)
-        for idx, row in tqdm(enumerate(prices)):
-            if year is not None and (idx < year * 8760 or idx >= (year + 1) * 8760):
-                continue
 
-            price: Price = {
-                "Date": parser.parse(cast(str, row.get("date"))),
-                "Open": float(cast(str, row.get("open"))),
-                "High": float(cast(str, row.get("high"))),
-                "Low": float(cast(str, row.get("low"))),
-                "Close": float(cast(str, row.get("close"))),
-                "Volume": float(cast(str, row.get("Volume BTC"))),
-                "Volume_USD": float(cast(str, row.get("Volume USD"))),
-            }
-            for sim in simulations:
-                sim.tick(price)
-        for sim in simulations:
-            result.append(
-                {
-                    "name": sim.hydra.name,
-                    "strategy": sim.hydra.strategy.name,
-                    "Total": sim.cash,
-                    "Transactions": len(sim.trade_history),
-                }
+    with pd.option_context("display.max_rows", None, "display.max_columns", None):
+        result = []
+        with open(
+            os.path.join(
+                os.path.dirname(os.path.realpath(__file__)),
+                "../data/Bitfinex_BTCUSD_1h.test.csv",
             )
-        df = pd.DataFrame(result)
-        print(df)
+        ) as file:
+            prices = DictReader(file)
+            for idx, row in tqdm(enumerate(prices)):
+                if idx < rangeStart * 8760 or idx >= rangeEnd * 8760:
+                    continue
+
+                price: Price = {
+                    "Date": parser.parse(cast(str, row.get("date"))),
+                    "Open": float(cast(str, row.get("open"))),
+                    "High": float(cast(str, row.get("high"))),
+                    "Low": float(cast(str, row.get("low"))),
+                    "Close": float(cast(str, row.get("close"))),
+                    "Volume": float(cast(str, row.get("Volume BTC"))),
+                    "Volume_USD": float(cast(str, row.get("Volume USD"))),
+                }
+                for sim in simulations:
+                    sim.tick(price)
+            for sim in simulations:
+                result.append(
+                    {
+                        "name": sim.hydra.name,
+                        "strategy": sim.hydra.strategy.name,
+                        "Total": sim.cash,
+                        "Transactions": len(sim.trade_history),
+                    }
+                )
+            df = pd.DataFrame(result)
+            print(df)
+
+
+steps = 1 / 12
+for loop in np.arange(0, 3, steps):
+    run_sim(loop, (loop + steps))
+run_sim(0, 1)

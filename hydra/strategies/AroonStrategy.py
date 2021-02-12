@@ -17,10 +17,10 @@ class AroonStrategy(Strategy):
         try:
             last_oscillator = price_history[-2][self.indicator.name]["oscillator"]
             this_oscillator = price_history[-1][self.indicator.name]["oscillator"]
-            if last_oscillator < 0 and this_oscillator > 0:
+            if last_oscillator <= 0 and this_oscillator > 0:
                 return Decision.BUY
 
-            if last_oscillator > 0 and this_oscillator < 0:
+            if last_oscillator >= 0 and this_oscillator < 0:
                 return Decision.SELL
         except IndexError:
             pass

@@ -64,7 +64,7 @@ class Hydra:
 
     # add new price
     def feed(self, food: Price):
-        price = food._asdict()
+        price = food
         for indicator in self.prioritized_indicators:
             price |= indicator.calculate(price, self.price_history)
 
@@ -72,4 +72,4 @@ class Hydra:
 
         decision = self.strategy.decide(self.price_history)
 
-        return decision
+        return decision, price

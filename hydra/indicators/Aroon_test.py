@@ -23,16 +23,16 @@ def test_aroon():
         aroon = Aroon.Indicator()
         prices = DictReader(file)
         for idx, row in enumerate(prices):
-            price = Price(
-                parser.parse(cast(str, row.get("date"))),
-                float(cast(str, row.get("open"))),
-                float(cast(str, row.get("high"))),
-                float(cast(str, row.get("low"))),
-                float(cast(str, row.get("close"))),
-                float(cast(str, row.get("Volume BTC"))),
-                float(cast(str, row.get("Volume USD"))),
-            )._asdict()
-            period, timespan = aroon.get_timespan(price, history)
+            price: Price = {
+                "Date": parser.parse(cast(str, row.get("date"))),
+                "Open": float(cast(str, row.get("open"))),
+                "High": float(cast(str, row.get("high"))),
+                "Low": float(cast(str, row.get("low"))),
+                "Close": float(cast(str, row.get("close"))),
+                "Volume": float(cast(str, row.get("Volume BTC"))),
+                "Volume_USD": float(cast(str, row.get("Volume USD"))),
+            }
+            period, timespan = aroon.get_history_segment(price, history)
             assert period == min(25, idx + 1)
             assert len(timespan) == period
 

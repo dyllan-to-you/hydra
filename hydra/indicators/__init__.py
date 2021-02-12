@@ -18,9 +18,9 @@ class Indicator(ABC):
         self.tier = tier
 
     @abstractmethod
-    def calc(self, price, history) -> NamedTuple:
+    def calc(self, price, history) -> Dict:
         pass
 
     def calculate(self, price, history) -> Dict[str, Dict]:
         output = self.calc(price, history)
-        return {self.name: output._asdict()}
+        return {self.name: output}

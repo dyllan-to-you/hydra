@@ -1,13 +1,13 @@
 import numpy as np
 import pandas as pd
-from typing import List, NamedTuple
+from typing import List, NamedTuple, TypedDict
 from . import Indicator as AIndicator
 from hydra.types import Price
 
 NAME = "heikin-ashi"
 
 
-class Output(NamedTuple):
+class Output(TypedDict):
     Close: float
     Open: float
     High: float
@@ -33,4 +33,4 @@ class Indicator(AIndicator):
         high = max(price["High"], open, close)
         low = min(price["Low"], open, close)
 
-        return Output(close, open, high, low)
+        return {"Close": close, "Open": open, "High": high, "Low": low}

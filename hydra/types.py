@@ -1,9 +1,9 @@
 from enum import Enum
-from typing import NamedTuple
+from typing import NamedTuple, TypedDict
 from datetime import datetime
 
 
-class Price(NamedTuple):
+class Price(TypedDict):
     Date: datetime
     Open: float
     High: float

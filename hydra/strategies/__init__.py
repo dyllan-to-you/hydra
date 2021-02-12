@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from hydra.types import Price
-from typing import List, NamedTuple, Union
+from typing import List, NamedTuple, TypedDict, Union
 import pandas as pd
 
 
@@ -12,7 +12,7 @@ class Decision(Enum):
     NONE = 0
 
 
-class DecisionEvent(NamedTuple):
+class DecisionEvent(TypedDict):
     timestamp: datetime
     decision: Decision
 
@@ -45,7 +45,7 @@ class Strategy(ABC):
         ):
             self.last_decision = decision
             self.decision_history.append(
-                DecisionEvent(price_history[-1]["Date"], decision)
+                {"timestamp": price_history[-1]["Date"], "decision": decision}
             )
 
         return decision

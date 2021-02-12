@@ -1,14 +1,16 @@
 import numpy as np
 import pandas as pd
-from typing import List, NamedTuple
+from typing import List, NamedTuple, TypedDict
 from . import Indicator as AIndicator
 from hydra.types import Price
 
 
-class Output(NamedTuple):
+class Output(TypedDict):
     up: float
     down: float
     oscillator: float
+    last_peak: float
+    last_valley: float
 
 
 NAME = "aroon"
@@ -23,8 +25,8 @@ class Indicator(AIndicator):
         self.name = f"aroon({self.period})"
         super().__init__(**kwargs)
 
-    def get_indexes(self, timespan):
-        reversed = timespan[::-1]
+    def get_indexes(self, history_segment):
+        reversed = history_segment[::-1]
         min_idx = np.argmin([p["Low"] for p in reversed])
         max_idx = np.argmax([p["High"] for p in reversed])
         return min_idx, max_idx
@@ -32,17 +34,25 @@ class Indicator(AIndicator):
     def get_line(self, period, idx) -> float:
         return ((period - idx) / period) * 100
 
-    def get_timespan(self, price, history):
+    def get_history_segment(self, price, history):
         period: int = self.period if len(history) >= self.period else len(history) + 1
-        timespan = (history + [price])[-period:]
-        return period, timespan
+        history_segment = (history + [price])[-period:]
+        return period, history_segment
 
     def calc(self, price, history: List[Price]) -> Output:
-        period, timespan = self.get_timespan(price, history)
-        min_idx, max_idx = self.get_indexes(timespan)
+        period, history_segment = self.get_history_segment(price, history)
+        min_idx, max_idx = self.get_indexes(history_segment)
+        max = history_segment[max_idx]
+        min = history_segment[min_idx]
 
         up = self.get_line(period, max_idx)
         down = self.get_line(period, min_idx)
         oscillator = up - down
 
-        return Output(round(up), round(down), round(oscillator))
+        return {
+            "up": round(up),
+            "down": round(down),
+            "oscillator": round(oscillator),
+            "last_peak": max["High"],
+            "last_valley": min["Low"],
+        }

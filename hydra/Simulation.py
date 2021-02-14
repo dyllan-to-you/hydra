@@ -10,6 +10,7 @@ import dateutil.parser as parser
 from hydra import Hydra
 from hydra.types import Price
 from hydra.strategies.AroonStrategy import AroonStrategy
+from hydra.indicators import Aroon, AroonTulip
 from tqdm import tqdm
 import asyncio
 import random
@@ -27,12 +28,12 @@ def pick_price_last_peak(row, decision, name):
     if decision == Decision.BUY:
         if row[name]["up"] < 100:
             return row["Open"]
-        return row[name]["last_peak"]
+        return row[name]["peak"]
 
     if decision == Decision.SELL:
         if row[name]["down"] < 100:
             return row["Open"]
-        return row[name]["last_valley"]
+        return row[name]["valley"]
 
 
 class Order(NamedTuple):
@@ -45,6 +46,8 @@ class Trade(TypedDict, total=False):
     sell: Order
     profit: float
     pl: float
+    up: float
+    down: float
 
 
 class Simulation:
@@ -59,15 +62,18 @@ class Simulation:
     def tick(self, price: Price, pick_price=pick_price_last_peak):
         decision, indicated_price = self.hydra.feed(price)
         fee = 1 - (self.hydra.fee / 100)
+        name = self.hydra.strategy.indicator.name
         order: Order = Order(
             price["Date"],
-            pick_price(
-                indicated_price, decision, name=self.hydra.strategy.indicator.name
-            ),
+            pick_price(indicated_price, decision, name=name),
         )
 
         if decision == Decision.BUY:
-            trade: Trade = {"buy": order, "profit": fee}
+            trade: Trade = {
+                "buy": order,
+                "profit": fee,
+                "up": indicated_price[name]["up"],
+            }
             self.cash *= fee
             self.trade_history.append(trade)
         elif decision == Decision.SELL:
@@ -77,18 +83,40 @@ class Simulation:
             trade["pl"] = sell_price / buy_price
             self.cash *= trade["pl"] * fee
             trade["profit"] *= trade["pl"] * fee
+            trade["down"] = indicated_price[name]["down"]
 
 
 def run_sim(rangeStart=0, rangeEnd=2.5):
     result = []
-    simulations = []
-    for i in range(1, 25):
-        period = i * 2
-        simulations.append(
-            Simulation(Hydra(AroonStrategy(period), name="binance", fee=0.06))
-        )
+    simulations = [
+        Simulation(
+            Hydra(
+                AroonStrategy(Aroon.Indicator, 16),
+                name="DIY",
+                fee=0.06,
+            )
+        ),
+        Simulation(
+            Hydra(
+                AroonStrategy(AroonTulip.Indicator, 16),
+                name="Tulip",
+                fee=0.06,
+            )
+        ),
+    ]
+    # for i in range(1, 25):
+    #     period = i * 2
+    #     simulations.append(
+    #         Simulation(
+    #             Hydra(
+    #                 AroonStrategy(AroonTulip.Indicator, period),
+    #                 name="binance",
+    #                 fee=0.06,
+    #             )
+    #         )
+    #     )
 
-    with pd.option_context("display.max_rows", None, "display.max_columns", None):
+    with pd.option_context("display.max_rows", None, "display.max_columns", 0):
         result = []
         with open(
             os.path.join(
@@ -113,19 +141,28 @@ def run_sim(rangeStart=0, rangeEnd=2.5):
                 for sim in simulations:
                     sim.tick(price)
             for sim in simulations:
-                result.append(
-                    {
-                        "name": sim.hydra.name,
-                        "strategy": sim.hydra.strategy.name,
-                        "Total": sim.cash,
-                        "Transactions": len(sim.trade_history),
-                    }
+                print(
+                    sim.hydra.name,
+                    sim.hydra.strategy.name,
+                    sim.cash,
+                    len(sim.trade_history),
                 )
-            df = pd.DataFrame(result)
-            print(df)
+                print(
+                    pd.json_normalize(sim.trade_history, sep=".").drop(columns="profit")
+                )
+        #         result.append(
+        #             {
+        #                 "name": sim.hydra.name,
+        #                 "strategy": sim.hydra.strategy.name,
+        #                 "Total": sim.cash,
+        #                 "Transactions": len(sim.trade_history),
+        #             }
+        #         )
+        # df = pd.DataFrame(result)
+        # print(df)
 
 
-steps = 1 / 12
-for loop in np.arange(0, 3, steps):
-    run_sim(loop, (loop + steps))
+# steps = 1 / 12
+# for loop in np.arange(0, 3, steps):
+#     run_sim(loop, (loop + steps))
 run_sim(0, 1)

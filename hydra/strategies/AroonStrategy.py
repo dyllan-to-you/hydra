@@ -1,22 +1,28 @@
 from . import Strategy
 from hydra.indicators import Indicator, Decision, Aroon
+import pandas as pd
 
 
 class AroonStrategy(Strategy):
     indicator: Indicator
 
-    def __init__(self, period=25):
+    def __init__(self, indicator, period=25):
         super().__init__()
-        self.indicator = Aroon.Indicator(period)
+        self.period = period
+        self.indicator = indicator(period)
         self.name = f"AroonStrategy({period})"
 
     def init_indicators(self):
         return self.indicator
 
     def _decide(self, price_history) -> Decision:
+
+        if len(price_history) <= self.period + 1:
+            return Decision.NONE
+
         try:
-            last_oscillator = price_history[-2][self.indicator.name]["oscillator"]
             this_oscillator = price_history[-1][self.indicator.name]["oscillator"]
+            last_oscillator = price_history[-2][self.indicator.name]["oscillator"]
             if last_oscillator <= 0 and this_oscillator > 0:
                 return Decision.BUY
 

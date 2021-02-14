@@ -11,6 +11,8 @@ matplotlib = "^3.3.4"
 mplfinance = "^0.12.7-alpha.5"
 python-dateutil = "^2.8.1"
 tqdm = "^4.56.1"
+pyarrow = "^3.0.0"
+newtulipy = "^0.4.4"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

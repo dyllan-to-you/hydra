@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from hydra.types import Price
-from typing import List, NamedTuple, TypedDict, Union
+from typing import List, NamedTuple, Tuple, TypedDict, Union
 import pandas as pd
 
 
@@ -33,8 +33,8 @@ class Strategy(ABC):
         df.set_index("timestamp", inplace=True)
         return df
 
-    def decide(self, price_history, *args, **kwargs) -> Decision:
-        decision = self._decide(price_history, *args, **kwargs)
+    def decide(self, price_history, *args, **kwargs) -> Tuple[Decision, float]:
+        decision, decision_price = self._decide(price_history, *args, **kwargs)
         # if decision is not Decision.NONE:
         #     self.decision_history.append(
         #         DecisionEvent(price_history[-1]["Date"], decision)
@@ -45,14 +45,18 @@ class Strategy(ABC):
         ):
             self.last_decision = decision
             self.decision_history.append(
-                {"timestamp": price_history[-1]["Date"], "decision": decision}
+                {
+                    "timestamp": price_history[-1]["Date"],
+                    "decision": decision,
+                    "price": decision_price,
+                }
             )
 
-            return decision
-        return Decision.NONE
+            return decision, decision_price
+        return Decision.NONE, 0
 
     @abstractmethod
-    def _decide(self, price_history) -> Decision:
+    def _decide(self, price_history) -> Tuple[Decision, float]:
         pass
 
     @abstractmethod

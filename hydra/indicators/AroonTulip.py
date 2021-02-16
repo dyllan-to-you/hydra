@@ -41,26 +41,27 @@ class Indicator(AIndicator):
     #     max_idx = np.argmax([p["High"] for p in reversed])
     #     return min_idx, max_idx
 
-    def get_line(self, period, idx) -> float:
-        return ((period - idx) / period) * 100
+    # def get_line(self, period, idx) -> float:
+    #     return ((period - idx) / period) * 100
 
     def get_history_segment(self, price, history):
         period: int = self.period if len(history) >= self.period else len(history) + 1
-        history_segment = (history + [price])[-period - 1 :]
+        history_segment = history[-period:] + [price]
         return period, history_segment
 
-    def get_last_history_segment(self, history):
-        period: int = self.period if len(history) > self.period else len(history)
-        last_history_segment = (history)[-period:]
-        return last_history_segment
+    # def get_last_history_segment(self, history):
+    #     period: int = self.period if len(history) > self.period else len(history)
+    #     last_history_segment = history[-period:]
+    #     return last_history_segment
 
     def calc(self, price, history: List[Price]) -> Output:
         period, history_segment = self.get_history_segment(price, history)
         if len(history_segment) <= period:
             return {}
-        df = pd.DataFrame(history_segment)
+        high = np.array([p["High"] for p in history_segment])
+        low = np.array([p["Low"] for p in history_segment])
         down, up = tulipy.aroon(
-            df["High"].to_numpy(), df["Low"].to_numpy(), period=period
+            high, low, period=period
         )
 
         oscillator = up - down
@@ -69,16 +70,16 @@ class Indicator(AIndicator):
         # )
         # assert (oscillator - real) < 0.00001
 
-        last_history_segment = self.get_last_history_segment(history)
-        dfl = pd.DataFrame(last_history_segment)
-        if len(dfl) == 0:
-            return None
-        valley = np.amin(dfl["Low"])
-        peak = np.amax(dfl["High"])
+        # last_history_segment = self.get_last_history_segment(history)
+        # dfl = pd.DataFrame(last_history_segment)
+        # if len(dfl) == 0:
+        #     return None
+        valley = np.amin(low[:-1])
+        peak = np.amax(high[:-1])
         return {
-            "up": round(up[-1]),
-            "down": round(down[-1]),
-            "oscillator": round(oscillator[-1]),
+            "up": up[-1],
+            "down": down[-1],
+            "oscillator": oscillator[-1],
             "peak": peak,
             "valley": valley,
         }

@@ -2,7 +2,7 @@ import pandas as pd
 from pandas.core.frame import DataFrame
 from hydra.types import Price
 import itertools
-from typing import Dict, List, Set, Union
+from typing import Dict, List, Set, Tuple, Union
 from hydra.strategies import Strategy
 from hydra.indicators import Decision, Indicator
 from hydra.utils import flatten
@@ -63,7 +63,16 @@ class Hydra:
         return df
 
     # add new price
-    def feed(self, food: Price):
+    def feed(self, food: Price) -> Tuple[Tuple[Decision, float], Price]:
+        # price: Price = {
+        #     "Date": food["Date"],
+        #     "Open": food["Open"],
+        #     "High": food["High"],
+        #     "Low": food["Low"],
+        #     "Close": food["Close"],
+        #     "Volume": food["Volume"],
+        #     "Volume_USD": food["Volume_USD"],
+        # }
         price = food
         for indicator in self.prioritized_indicators:
             price |= indicator.calculate(price, self.price_history)

@@ -14,6 +14,9 @@ tqdm = "^4.56.1"
 pyarrow = "^3.0.0"
 newtulipy = "^0.4.4"
 plotly = "^4.14.3"
+bokeh = "^2.2.3"
+psutil = "^5.8.0"
+requests = "^2.25.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

@@ -139,3 +139,7 @@ cython_debug/
 
 # Scratchpad
 scratch.py
+
+csv/
+
+data/*

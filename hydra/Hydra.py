@@ -23,6 +23,7 @@ class Hydra:
         name: str = "",
         fee: float = 0,
     ):
+        self.df = None
         self.price_history = []
         self.decisions = []
         self.indicators = {}
@@ -58,9 +59,12 @@ class Hydra:
 
     @property
     def price_history_df(self) -> DataFrame:
-        df = pd.json_normalize(self.price_history)
-        df.set_index("Date", inplace=True)
-        return df
+        if self.df is not None:
+            return self.df
+
+        self.df = pd.json_normalize(self.price_history)
+        self.df.set_index("Date", inplace=True)
+        return self.df
 
     # add new price
     def feed(self, food: Price) -> Tuple[Tuple[Decision, float], Price]:

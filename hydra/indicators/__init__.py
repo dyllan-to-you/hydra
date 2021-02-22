@@ -14,7 +14,7 @@ class Indicator(ABC):
     name: str
     tier: int
 
-    def __init__(self, tier=0):
+    def __init__(self, tier=0, **kwargs):
         self.tier = tier
 
     @abstractmethod

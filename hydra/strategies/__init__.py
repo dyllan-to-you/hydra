@@ -40,8 +40,14 @@ class Strategy(ABC):
         #         DecisionEvent(price_history[-1]["Date"], decision)
         #     )
 
-        if (self.last_decision == Decision.SELL and decision is Decision.BUY) or (
-            self.last_decision == Decision.BUY and decision is Decision.SELL
+        # if decision == Decision.BUY or decision == Decision.SELL:
+        #     print(decision, price_history)
+
+        if decision == Decision.NONE:
+            return Decision.NONE, 0
+
+        if (self.last_decision == Decision.SELL and decision == Decision.BUY) or (
+            self.last_decision == Decision.BUY and decision == Decision.SELL
         ):
             self.last_decision = decision
             self.decision_history.append(

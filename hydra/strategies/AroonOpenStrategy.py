@@ -1,14 +1,14 @@
 from typing import Tuple
 from numpy import NaN
 from . import Strategy
-from hydra.indicators import AroonOpen, Indicator, Decision
+from hydra.indicators import Aroon, AroonOpen, Indicator, Decision
 import pandas as pd
 
 
 class AroonOpenStrategy(Strategy):
     indicator: Indicator
 
-    def __init__(self, indicator, period=25):
+    def __init__(self, indicator=Aroon.Indicator, period=25):
         super().__init__()
         self.period = period
         self.indicator = indicator(period)
@@ -18,17 +18,17 @@ class AroonOpenStrategy(Strategy):
     def init_indicators(self):
         return [self.indicator, self.open_indicator]
 
-    def check_aroon(self, indicator, price_history):
+    def check_aroon(self, indicator, price_history) -> Tuple[Decision, float]:
         try:
             this_price = price_history[-1]
             # print(indicator.name, this_price)
             this_oscillator = this_price[indicator.name]["oscillator"]
             last_oscillator = price_history[-2][indicator.name]["oscillator"]
             if last_oscillator <= 0 and this_oscillator > 0:
-                return self.pick_price(this_price, Decision.BUY)
+                return self.pick_price(Decision.BUY, this_price)
 
             if last_oscillator >= 0 and this_oscillator < 0:
-                return self.pick_price(this_price, Decision.SELL)
+                return self.pick_price(Decision.SELL, this_price)
         except IndexError:
             pass
 
@@ -49,7 +49,7 @@ class AroonOpenStrategy(Strategy):
 
         return (Decision.NONE, NaN)
 
-    def pick_price(self, price, decision):
+    def pick_price(self, decision, price) -> Tuple[Decision, float]:
         if decision == Decision.BUY:
             if price[self.indicator.name]["up"] < 100:
                 return decision, price["Open"]

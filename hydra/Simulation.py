@@ -1,23 +1,22 @@
+import math
+import sys
 import time
 from datetime import datetime
 from hydra.strategies import Decision, DecisionEvent
-import os
 import numpy as np
 import pandas as pd
-from csv import DictReader
 from typing import List, NamedTuple, TypedDict, cast
 import dateutil.parser as parser
 from hydra import Hydra
 from hydra.types import Price
-from hydra.strategies.AroonStrategy import AroonStrategy
-from hydra.strategies.AroonOpenStrategy import AroonOpenStrategy
-from hydra.indicators import Aroon, AroonTulip
+from hydra.strategies.PSARoonStrategy import PSARoonStrategy
 from tqdm import tqdm
 import pyarrow.parquet as pq
 import pathlib
 from datetime import datetime
-import hydra.PlotlyChart as pl
 import hydra.BokehChart as bokeh
+import sqlite3
+from datetime import datetime
 
 
 class Order(NamedTuple):
@@ -43,53 +42,42 @@ class Simulation:
         self.hydra = hydra
         self.trade_history = []
         self.cash = 1
+        self.fee = 1 - (self.hydra.fee / 100)
 
     def tick(self, price: Price):
         (decision, decision_price), indicated_price = self.hydra.feed(price)
-        fee = 1 - (self.hydra.fee / 100)
-        order: Order = Order(price["Date"], decision_price)
+        if decision == Decision.NONE:
+            return
 
         if decision == Decision.BUY:
+            order: Order = Order(price["Date"], decision_price)
             trade: Trade = {
                 "buy": order,
-                "profit": fee,
+                "profit": self.fee,
             }
-            self.cash *= fee
+            self.cash *= self.fee
             trade["cash_buy"] = self.cash
             self.trade_history.append(trade)
         elif decision == Decision.SELL:
+            order: Order = Order(price["Date"], decision_price)
             trade = self.trade_history[-1]
             buy_time, buy_price = trade["buy"]
             sell_time, sell_price = trade["sell"] = order
             trade["pl"] = sell_price / buy_price
-            self.cash *= trade["pl"] * fee
+            self.cash *= trade["pl"] * self.fee
             trade["cash_sell"] = self.cash
-            trade["profit"] *= trade["pl"] * fee
+            trade["profit"] *= trade["pl"] * self.fee
 
 
 def run_sim(
     pair,
     startDate="2020-01-01",
     endDate="2021-01-01",
-    periods=[10],
+    simulations=[],
     interval=1,
     graph=False,
     path="./data/kraken/",
 ):
-    result = []
-    simulations = []
-
-    for period in periods:
-        simulations.append(
-            Simulation(
-                Hydra(
-                    AroonStrategy(Aroon.Indicator, period),
-                    name="DIY",
-                    fee=0.06,
-                )
-            ),
-        )
-
     result = []
     filepath = pathlib.Path().absolute()
     parqpath = filepath.joinpath(path, "parq", f"{pair}_{interval}.parq")
@@ -126,28 +114,30 @@ def run_sim(
             # So don't fill gaps if last_row is none
             # Otherwise, fill gaps if the gap between times is greater than the interval
             gaps = []
-            while (
-                last_row is not None
-                and pd.Timedelta(time - last_row[0]).total_seconds() / 60.0 > interval
-            ):
-                new_time = last_row[0] + pd.Timedelta(minutes=interval)
-                last_row = (new_time, close, close, close, close, 0, 0)
-                fill_price: Price = {
-                    "Date": new_time,
-                    "Open": close,
-                    "High": close,
-                    "Low": close,
-                    "Close": close,
-                    "Volume": 0,
-                    "Trades": 0,
-                }
-                for sim in simulations:
-                    pbar.update(increment)
-                    sim.tick(fill_price)
-                if len(gaps) == 0 or len(gaps) == 1:
-                    gaps.append(new_time)
-                else:
-                    gaps[1] = new_time
+            if last_row is not None:
+                numGaps = (
+                    pd.Timedelta(time - last_row[0]).total_seconds() / 60.0 / interval
+                )
+                if numGaps > 1:
+                    for gap in range(math.ceil(numGaps)):
+                        new_time = last_row[0] + pd.Timedelta(minutes=interval)
+                        last_row = (new_time, close, close, close, close, 0, 0)
+                        fill_price: Price = {
+                            "Date": new_time,
+                            "Open": close,
+                            "High": close,
+                            "Low": close,
+                            "Close": close,
+                            "Volume": 0,
+                            "Trades": 0,
+                        }
+                        for sim in simulations:
+                            pbar.update(increment)
+                            sim.tick(fill_price)
+                        if len(gaps) == 0 or len(gaps) == 1:
+                            gaps.append(new_time)
+                        else:
+                            gaps[1] = new_time
 
             # if len(gaps):
             #     print("Filled Gap:", gaps)
@@ -171,51 +161,143 @@ def run_sim(
             # fig.write_image(imagedir.joinpath(name))
             # os.system("start " + imagedir.joinpath(name))
 
-            # current_time = df.index[0]
-            # while current_time < df.index[-1]:
-            #     next_time = current_time + pd.Timedelta(months=1)
-            #     month_fig = pl.graph(sim, df.iloc[current_time:next_time])
-            #     name = f"{sim.hydra.name}.{sim.hydra.strategy.name}.{current_time.year}.{current_time.month}.html"
-            #     print("Writing", name)
-            #     month_fig.write_html(imagedir.joinpath(name))
-            #     current_time = next_time
-
         # print(pd.DataFrame(sim.trade_history))
         result.append(
             {
                 "name": sim.hydra.name,
+                "strat": sim.hydra.strategy.shortname,
                 "strategy": sim.hydra.strategy.name,
+                **sim.hydra.strategy.args,
                 "Total": sim.cash,
                 "Transactions": len(sim.trade_history),
             }
         )
-    with pd.option_context("display.max_rows", None, "display.max_columns", 0):
-        df = pd.DataFrame(result)
-        print(df)
-    return simulations
+    return simulations, result
 
 
-periods = [35]
-# aroon(40  hours) = aroon(2400 min)
-# for i in range(1, 160):
-#     periods.append(i * 15)
+# trade history
+# result + strategy parameters
+
+
+simulations = []
+# for i in range(600):
+#     period = (i + 1) * 5
+#     for j in range(5):
+#         AFstart = (j + 1) * 0.01
+#         for k in range(20):
+#             AFstep = (k + 1) * 0.005
+#             for l in range(21):
+#                 AFmax = AFstart + (AFstep * l)
+#                 for m in range(11):
+#                     threshold = m * 10
+#                     simulations.append(
+#                         Simulation(
+#                             Hydra(
+#                                 PSARoonStrategy(
+#                                     period=period,
+#                                     AFstart=AFstart,
+#                                     AFstep=AFstep,
+#                                     AFmax=AFmax,
+#                                     aroon_buy_threshold=threshold,
+#                                 ),
+#                                 name="DIY",
+#                                 fee=0.06,
+#                             )
+#                         ),
+#                     )
+
+# for i in range(2):
+#     period = (i + 1) * 5
+#     for j in range(2):
+#         AFstart = (j + 1) * 0.01
+#         for k in range(2):
+#             AFstep = (k + 1) * 0.005
+#             for l in range(2):
+#                 AFmax = AFstart + (AFstep * l)
+#                 for m in range(2):
+#                     threshold = m * 10
+#                     simulations.append(
+#                         Simulation(
+#                             Hydra(
+#                                 PSARoonStrategy(
+#                                     period=period,
+#                                     AFstart=AFstart,
+#                                     AFstep=AFstep,
+#                                     AFmax=AFmax,
+#                                     aroon_buy_threshold=threshold,
+#                                 ),
+#                                 name="DIY",
+#                                 fee=0.06,
+#                             )
+#                         ),
+#                     )
+
+simulations.append(
+    Simulation(
+        Hydra(
+            PSARoonStrategy(
+                # period=period,
+                # AFstart=AFstart,
+                # AFstep=AFstep,
+                # AFmax=AFmax,
+                # aroon_buy_threshold=threshold,
+            ),
+            name="DIY",
+            fee=0.06,
+        )
+    ),
+)
+
 
 t0 = time.time()
-run_sim(
+sims, result = run_sim(
     "XBTUSD",
     startDate="2018-05-15",
     endDate="2018-07-15",
     interval=1,
-    periods=[30],
-    graph=True,
+    simulations=simulations,
+    graph=False,
 )
-# run_sim(
-#     "XBTUSD",
-#     startDate="2018-05-15",
-#     endDate="2021-05-15",
-#     interval=60,
-#     periods=[35],
-#     graph=True,
-# )
+
+
 t1 = time.time()
 print("Total Time Elapsed:", t1 - t0)
+
+
+# with pd.option_context("display.max_rows", None, "display.max_columns", 0):
+df = pd.DataFrame(result)
+try:
+    outPath = sys.argv[1]
+except:
+    outPath = "./data/output"
+
+maxProfit = df["Total"].max()
+filedir = pathlib.Path.cwd().joinpath(outPath).resolve()
+now = datetime.today().strftime("%Y-%m-%dT%H%M%S")
+filename = f"{now} {len(simulations)} Simulations {round(maxProfit, 4)} Profit"
+filepath = filedir.joinpath(filename)
+
+con_string = filedir.joinpath(f"{filepath}.db")
+print(con_string)
+filedir.mkdir(parents=True, exist_ok=True)
+# con_string.touch()
+conn = sqlite3.connect(con_string)
+cursor = conn.cursor()
+cursor.execute("SELECT SQLITE_VERSION()")
+data = cursor.fetchone()
+print("SQLite version:", data)
+
+df.to_sql(name="strategies", con=conn)
+for sim in sims:
+    trades = pd.json_normalize(sim.trade_history)
+    trades["strategy"] = sim.hydra.strategy.name
+    trades[["buy_time", "buy_price"]] = pd.DataFrame(
+        trades["buy"].tolist(), index=trades.index
+    )
+    trades[["sell_time", "sell_price"]] = pd.DataFrame(
+        trades["sell"].tolist(), index=trades.index
+    )
+
+    trades.drop(["buy", "sell"], axis=1, inplace=True)
+    print(trades)
+    trades.to_sql(name="trades", if_exists="append", con=conn)

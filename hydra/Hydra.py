@@ -15,6 +15,7 @@ class Hydra:
     indicators: Dict[int, List[Indicator]]
     indicator_set: Set
     strategy: Strategy
+    _prioritized_indicators: List[Indicator]
 
     def __init__(
         self,
@@ -24,6 +25,7 @@ class Hydra:
         fee: float = 0,
     ):
         self.df = None
+        self._prioritized_indicators = None
         self.price_history = []
         self.decisions = []
         self.indicators = {}
@@ -51,11 +53,17 @@ class Hydra:
     def add_indicator(self, indicator: Indicator):
         if indicator.name not in self.indicator_set:
             self.indicators.setdefault(indicator.tier, []).append(indicator)
+        self._prioritized_indicators = None
         return self
 
     @property
     def prioritized_indicators(self):
-        return itertools.chain(*self.indicators.values())
+        # print("prioritized_indicators", self._prioritized_indicators)
+        if self._prioritized_indicators is None:
+            self._prioritized_indicators = list(
+                itertools.chain(*self.indicators.values())
+            )
+        return self._prioritized_indicators
 
     @property
     def price_history_df(self) -> DataFrame:
@@ -79,10 +87,11 @@ class Hydra:
         # }
         price = food
         for indicator in self.prioritized_indicators:
+            # print(indicator.name)
             price |= indicator.calculate(price, self.price_history)
         # print("\n", self.strategy.indicator.name, pd.json_normalize(self.price_history))
         self.price_history.append(price)
-        # print("\n", self.strategy.indicator.name, pd.json_normalize(self.price_history))
+        # print("\n", pd.json_normalize(self.price_history))
 
         decision = self.strategy.decide(self.price_history)
 

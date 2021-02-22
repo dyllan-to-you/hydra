@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from bokeh.layouts import column
-from bokeh.plotting import curdoc, figure
+from bokeh.plotting import figure
 from bokeh.io import curdoc, show
 from bokeh.models import CustomJS, ColumnDataSource, HoverTool, WheelZoomTool
 from bokeh.models.widgets import DateRangeSlider
@@ -77,7 +77,6 @@ class Chart:
 
     def update_trades(self, start, end):
         # create new view from dataframe
-        print(self._trade_df, start, end)
         df_view = self.trade_df.loc[start:end]
 
         # create new source
@@ -143,19 +142,7 @@ class Chart:
             x_range=main.x_range,
             x_axis_type="datetime",
         )
-        print(self.trades)
         p.line(x="Date", y="cash", color="green", source=self.trades)
-        return p
-
-    def draw_aroon(self, main, name):
-        p = figure(
-            plot_height=250,
-            plot_width=1200,
-            x_range=main.x_range,
-            x_axis_type="datetime",
-        )
-        p.line(x="Date", y=f"{name}.down", color="red", source=self.history)
-        p.line(x="Date", y=f"{name}.up", color="green", source=self.history)
         return p
 
     def slider_handler(self, attr, old, new):
@@ -180,7 +167,6 @@ class Chart:
         sells["color"] = "red"
         sells = sells.join(trades[["cash_sell"]]).rename(columns={"cash_sell": "cash"})
         self._trade_df = buys.append(sells)
-        print(trades, "\n", sells, "\n", buys, "\n", self._trade_df)
         self._trade_df["Date"] = pd.to_datetime(self._trade_df["Date"], unit="s")
         self._trade_df.set_index("Date", inplace=True)
         self._trade_df.sort_index(inplace=True)
@@ -227,10 +213,16 @@ class Chart:
         # p.x_range.js_on_change("start", callback)
 
         slider.js_on_change("value", self.scale_y_axis(plot))
-        aroon = self.draw_aroon(plot, sim.hydra.strategy.indicator.name)
         profit = self.draw_profit(plot)
 
+        if callable(getattr(sim.hydra.strategy, "draw_bokeh_layer", None)):
+            sim.hydra.strategy.draw_bokeh_layer(plot, self)
+
+        subplots = []
+        if callable(getattr(sim.hydra.strategy, "draw_bokeh_subplot", None)):
+            subplots.append(sim.hydra.strategy.draw_bokeh_subplot(plot, self))
+
         curdoc().add_root(
-            column(plot, aroon, profit, slider, sizing_mode="stretch_width")
+            column(slider, plot, profit, *subplots, sizing_mode="stretch_width")
         )
         # show(column(plot, slider))

@@ -1,6 +1,7 @@
 {
-  "include": ["src"],
-
+  "include": [
+    "src"
+  ],
   "exclude": [
     "**/node_modules",
     "**/__pycache__",
@@ -8,17 +9,14 @@
     "src/typestubs",
     ".venv"
   ],
-  "ignore": ["src/oldstuff"],
-
+  "ignore": [
+    "src/oldstuff"
+  ],
   "stubPath": "src/stubs",
-  "venvPath": "./.venv/",
-
   "reportTypeshedErrors": false,
   "reportMissingImports": true,
   "reportMissingTypeStubs": false,
-
-  "pythonVersion": "3.9",
-
+  "pythonVersion": "3.8",
   "executionEnvironments": [
     {
       "root": "./",

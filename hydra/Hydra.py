@@ -88,7 +88,7 @@ class Hydra:
         price = food
         for indicator in self.prioritized_indicators:
             # print(indicator.name)
-            price |= indicator.calculate(price, self.price_history)
+            price = {**price, **indicator.calculate(price, self.price_history)}
         # print("\n", self.strategy.indicator.name, pd.json_normalize(self.price_history))
         self.price_history.append(price)
         # print("\n", pd.json_normalize(self.price_history))

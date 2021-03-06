@@ -10,6 +10,7 @@ import dateutil.parser as parser
 from hydra import Hydra
 from hydra.types import Price
 from hydra.strategies.PSARoonStrategy import PSARoonStrategy
+from hydra.strategies.AroonStrategy import AroonStrategy
 from tqdm import tqdm
 import pyarrow.parquet as pq
 import pathlib
@@ -232,28 +233,25 @@ simulations = []
 #                         ),
 #                     )
 
-simulations.append(
-    Simulation(
-        Hydra(
-            PSARoonStrategy(
-                # period=period,
-                # AFstart=AFstart,
-                # AFstep=AFstep,
-                # AFmax=AFmax,
-                # aroon_buy_threshold=threshold,
-            ),
-            name="DIY",
-            fee=0.06,
-        )
-    ),
-)
+for period in range(2, 10):
+    simulations.append(
+        Simulation(
+            Hydra(
+                AroonStrategy(
+                    period=period,
+                ),
+                name="DIY",
+                fee=0.06,
+            )
+        ),
+    )
 
 
 t0 = time.time()
 sims, result = run_sim(
     "XBTUSD",
     startDate="2018-05-15",
-    endDate="2018-07-15",
+    endDate="2021-07-15",
     interval=1,
     simulations=simulations,
     graph=False,
@@ -277,17 +275,17 @@ now = datetime.today().strftime("%Y-%m-%dT%H%M%S")
 filename = f"{now} {len(simulations)} Simulations {round(maxProfit, 4)} Profit"
 filepath = filedir.joinpath(filename)
 
-con_string = filedir.joinpath(f"{filepath}.db")
-print(con_string)
-filedir.mkdir(parents=True, exist_ok=True)
-# con_string.touch()
-conn = sqlite3.connect(con_string)
-cursor = conn.cursor()
-cursor.execute("SELECT SQLITE_VERSION()")
-data = cursor.fetchone()
-print("SQLite version:", data)
+# con_string = filedir.joinpath(f"{filepath}.db")
+# print(con_string)
+# filedir.mkdir(parents=True, exist_ok=True)
+# # con_string.touch()
+# conn = sqlite3.connect(con_string)
+# cursor = conn.cursor()
+# cursor.execute("SELECT SQLITE_VERSION()")
+# data = cursor.fetchone()
+# print("SQLite version:", data)
 
-df.to_sql(name="strategies", con=conn)
+# df.to_sql(name="strategies", con=conn)
 for sim in sims:
     trades = pd.json_normalize(sim.trade_history)
     trades["strategy"] = sim.hydra.strategy.name
@@ -299,5 +297,5 @@ for sim in sims:
     )
 
     trades.drop(["buy", "sell"], axis=1, inplace=True)
-    print(trades)
-    trades.to_sql(name="trades", if_exists="append", con=conn)
+    # print(trades)
+    # trades.to_sql(name="trades", if_exists="append", con=conn)

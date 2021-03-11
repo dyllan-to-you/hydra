@@ -1,0 +1,10 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"python.venvPath": "C\\\\Users\\Jarwain\\AppData\\Local\\pypoetry\\Cache\\virtualenvs"
+	}
+}

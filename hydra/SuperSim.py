@@ -1,8 +1,6 @@
-import math
-import sys
+import pickle
 import time
-from datetime import datetime
-from hydra.strategies import Decision, DecisionEvent
+from datetime import datetime, date
 import numpy as np
 import pandas as pd
 from typing import List, NamedTuple, TypedDict, cast
@@ -18,18 +16,34 @@ import hydra.BokehChart as bokeh
 import sqlite3
 from datetime import datetime
 from numba import njit
-import numba
 import vectorbt as vbt
 from vectorbt.signals.factory import SignalFactory
 
-vbt.settings.ohlcv["column_names"] = {
-    "open": "open",
-    "high": "high",
-    "low": "low",
-    "close": "close",
-    "volume": "volume",
-}
+# vbt.settings.caching["blacklist"].append("Portfolio")
+# vbt.settings.caching["whitelist"].extend(
+#     ["Portfolio.cash_flow", "Portfolio.share_flow"]
+# )
 
+def printd(*arg):
+    print(date.today().strftime("[%Y-%m-%d %H:%M:%S]"), *arg)
+
+
+
+def get_methods(object, spacing=20):
+  methodList = []
+  for method_name in dir(object):
+    try:
+        if callable(getattr(object, method_name)):
+            methodList.append(str(method_name))
+    except:
+        methodList.append(str(method_name))
+  processFunc = (lambda s: ' '.join(s.split())) or (lambda s: s)
+  for method in methodList:
+    try:
+        print(str(method.ljust(spacing)) + ' ' +
+              processFunc(str(getattr(object, method).__doc__)[0:90]))
+    except:
+        print(method.ljust(spacing) + ' ' + ' getattr() failed')
 
 @njit
 def aroon_entry(from_i, to_i, col, a, temp_idx_arr):
@@ -65,38 +79,42 @@ def run_sim(
     endDate="2021-01-01",
     interval=1,
     path="./data/kraken/",
+    name=None
 ):
-    res = []
+    vbt.settings.ohlcv["column_names"] = {
+        "open": "open",
+        "high": "high",
+        "low": "low",
+        "close": "close",
+        "volume": "volume",
+    }
     for pair in pairs:
+        printd('Simulating', pair)
         filepath = pathlib.Path().absolute()
-        parqpath = filepath.joinpath(path, "parq", f"{pair}_{interval}.parq")
+        parqpath = filepath.joinpath(path, f"{pair}_{interval}.parq")
         table = pq.read_table(parqpath)
         prices = table.to_pandas()
         prices["time"] = pd.to_datetime(prices["time"], unit="s")
         prices = prices.set_index("time").loc[startDate:endDate]  # ["close"]
         prices.drop("trades", axis=1, inplace=True)
-        print("Prices:", prices)
+        # printd("Prices:", prices)
+        printd(pair, 'prices loaded')
 
-        vbt.settings.portfolio["freq"] = f"{interval}m"
-        vbt.settings.portfolio["init_cash"] = 100.0  # in $
-        vbt.settings.portfolio["fees"] = 0.0006  # in %
-        # vbt.settings.portfolio["slippage"] = 0.0025  # in %
-        # vbt.settings.caching["blacklist"].append("Portfolio")
-        # vbt.settings.caching["whitelist"].extend(
-        #     ["Portfolio.cash_flow", "Portfolio.share_flow"]
-        # )
+        for count, batch in enumerate(batches):
+            printd(pair, 'batch', count, ': Generating Indicators')
 
-        for batch in batches:
             AROONOSC = vbt.IndicatorFactory.from_talib("AROONOSC")
-            # print(help(AROONOSC.run))
-
+            # printd(help(AROONOSC.run))
             aroonosc = AROONOSC.run(
                 prices["high"], prices["low"], **batch.get("AROONOSC")
             )
-            SAREXT = vbt.IndicatorFactory.from_talib("SAREXT")
-            # print(help(SAREXT.run))
-            sarext = SAREXT.run(prices["high"], prices["low"], **batch.get("SAREXT"))
 
+            SAREXT = vbt.IndicatorFactory.from_talib("SAREXT")
+            # printd(help(SAREXT.run))
+            sarext = SAREXT.run(prices["high"], prices["low"], **batch.get("SAREXT"))
+            printd(pair, 'batch', count, ': Generated Indicators')
+
+            printd(pair, 'batch', count, ': Generating Strategy')
             # Build signal generator
             AroonStrategy = SignalFactory(input_names=["aroon"]).from_choice_func(
                 entry_choice_func=aroon_entry,
@@ -109,50 +127,58 @@ def run_sim(
                     pass_inputs=["aroon"],
                     pass_kwargs=["temp_idx_arr"],  # built-in kwarg
                 ),
-                forward_flex_2d=True,
+                # forward_flex_2d=True,
             )
             # Run strategy signal generator
             aroon_signals = AroonStrategy.run(aroonosc.real)
+            printd(pair, 'batch', count, ': Generated Strategy')
 
+            printd(pair, 'batch', count, ': Simulating Orders')
             portfolio = vbt.Portfolio.from_signals(
-                prices["close"], aroon_signals.entries, aroon_signals.exits
+                prices["close"], aroon_signals.entries, aroon_signals.exits,
+                freq = f"{interval}m",
+                init_cash = 100.0,  # in $
+                fees = 0.0006,  # in %
+                # slippage = 0.0025  # in %
             )
 
-            # with pd.option_context(
-            #     "display.max_rows", None, "display.max_columns", None
-            # ):  # more options can be specified also
+            # printd(portfolio.sharpe_ratio())
+            # portfolio.save('portfolio_config')
+            # portfolio = vbt.Portfolio.load('portfolio_config')
+            # portfolio.sharpe_ratio()            # printd(pair, 'batch', count, ': Simulated Orders')
 
-            #     print(
-            #         portfolio.stats(agg_func=None)
-            #         # portfolio.orders.buy.count(),
-            #         # portfolio.orders.sell.count(),
-            #     )
+            # printd('Portfolio Methods:', get_methods(portfolio))
+            # printd(issubclass(type(portfolio), vbt.Pickleable))
 
-            # portfolio.value().vbt.plot()
+            printd(pair, 'batch', count, ': Saving file')
 
-            # res.append(portfolio)
+            # startvalue=0, offsetonreverse=0, accelerationinitlong=0.02, accelerationlong=0.02, accelerationmaxlong=0.2, accelerationinitshort=0.02, accelerationshort=0.02, accelerationmaxshort=0.2
+            filename = f"{pair} Aroon {batch['AROONOSC']['timeperiod'][0]}-{batch['AROONOSC']['timeperiod'][-1]}.portfolio"
+            if name is not None:
+                filename = f"{name} {filename}"
+            portfolio.save(filename)
+            # pickle.dump( portfolio, open( f"{filename}.p", "wb" ) )
 
-    return res
 
 
-psars = [(x * 0.0002) + 0.01 for x in range(50)]
 
-t0 = time.time()
-portfolios = run_sim(
-    ["XBTUSD"],
-    batches=[
-        {
-            "AROONOSC": {"timeperiod": list(range(2, 10))},
-            "SAREXT": {"startvalue": [0.01]},
-        }
-    ],
-    startDate="2018-05-15",
-    endDate="2021-07-15",
-    interval=1,
-)
+def start():
+    t0 = time.time()
+    portfolios = run_sim(
+        ["XBTUSD"],
+        batches=[
+            {
+                "AROONOSC": {"timeperiod": list(range(100, 101))},
+                "SAREXT": {"startvalue": [0.01]},
+            }
+        ],
+        startDate="2018-05-15",
+        endDate="2018-07-15",
+        interval=1,
+    )
 
-t1 = time.time()
-print("Total Time Elapsed:", t1 - t0)
-# for portfolio in portfolios:
-# print(portfolio.total_return())
-# print(portfolio.total_profit())
+    t1 = time.time()
+    printd("Total Time Elapsed:", t1 - t0)
+    # for portfolio in portfolios:
+    # printd(portfolio.total_return())
+    # printd(portfolio.total_profit())

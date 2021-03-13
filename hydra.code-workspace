@@ -5,6 +5,7 @@
 		}
 	],
 	"settings": {
-		"python.venvPath": "C\\\\Users\\Jarwain\\AppData\\Local\\pypoetry\\Cache\\virtualenvs"
+		"python.venvPath": "C:\\\\Users\\\\Jarwain\\\\AppData\\\\Local\\\\pypoetry\\\\Cache\\\\virtualenvs",
+		"jupyter.jupyterServerType": "local"
 	}
 }

@@ -16,17 +16,18 @@ from hydra.utils import printd
 #     ["Portfolio.cash_flow", "Portfolio.share_flow"]
 # )
 vbt.settings.ohlcv["column_names"] = {
-        "open": "open",
-        "high": "high",
-        "low": "low",
-        "close": "close",
-        "volume": "volume",
-    }
+    "open": "open",
+    "high": "high",
+    "low": "low",
+    "close": "close",
+    "volume": "volume",
+}
+
 
 @njit
 def aroon_entry(from_i, to_i, col, a, temp_idx_arr):
     if from_i == 0:
-        w = np.where(a[:, col] > 99)[0]
+        w = np.where(a[:, col] > 50)[0]
         for i, num in enumerate(w):
             temp_idx_arr[i] = num
 
@@ -40,7 +41,7 @@ def aroon_entry(from_i, to_i, col, a, temp_idx_arr):
 def aroon_exit(from_i, to_i, col, a, temp_idx_arr):
     if temp_idx_arr[-1] != 42:
         temp_idx_arr[-1] = 42
-        w = np.where(a[:, col] < -99)[0]
+        w = np.where(a[:, col] < -50)[0]
         for i, num in enumerate(w):
             temp_idx_arr[i] = num
 
@@ -61,11 +62,14 @@ def order_func(oc, open):
 
 def load_prices(pair, path, startDate, endDate, interval):
     filepath = pathlib.Path(__file__).parent.absolute()
-    parqpath = filepath.joinpath(path, f"{pair}_{interval}.parq")
+    parqpath = filepath.joinpath(path, f"{pair}_{interval}.filled.parq")
     table = pq.read_table(parqpath)
     prices = table.to_pandas()
-    prices["time"] = pd.to_datetime(prices["time"], unit="s")
-    prices = prices.set_index("time").loc[startDate:endDate]  # ["close"]
+    # print(prices.index)
+    if not isinstance(prices.index, pd.DatetimeIndex):
+        prices["time"] = pd.to_datetime(prices["time"], unit="s")
+        prices = prices.set_index("time")
+    prices = prices.loc[startDate:endDate]
     prices.drop("trades", axis=1, inplace=True)
     return prices
 
@@ -76,7 +80,7 @@ def run_sim(
     startDate="2020-01-01",
     endDate="2021-01-01",
     interval=1,
-    path="../data/kraken/",
+    path="../data/kraken",
     name=None,
 ):
     for pair in pairs:
@@ -134,10 +138,12 @@ def run_sim(
             # )
 
             portfolio = vbt.Portfolio.from_signals(
-                prices["close"], aroon_signals.entries, aroon_signals.exits,
-                freq = f"{interval}m",
-                init_cash = 100.0,  # in $
-                fees = 0.0006,  # in %
+                prices["close"],
+                aroon_signals.entries,
+                aroon_signals.exits,
+                freq=f"{interval}m",
+                init_cash=100.0,  # in $
+                fees=0.0006,  # in %
                 # slippage = 0.0025  # in %
             )
 
@@ -182,7 +188,7 @@ def start():
             }
         ],
         startDate="2018-05-15",
-        endDate="2018-05-16",
+        endDate="2021-05-16",
         interval=1,
         name=args.name,
     )

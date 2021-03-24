@@ -9,6 +9,13 @@ def now():
 def printd(*arg):
     print(f"[{now()}]", *arg)
 
+def write(message, filename = 'log.txt'):
+    f = open(filename, "a")
+    f.write(f"[{now()}] {message}")
+    f.close()
+
+def get_closest(num, list):
+    return min(list, key=lambda x:abs(x-num))
 
 def get_methods(object, spacing=20):
   methodList = []

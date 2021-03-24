@@ -5,7 +5,7 @@ description = ""
 authors = ["Dyllan To <me@dyllan.to>"]
 
 [tool.poetry.dependencies]
-python = ">=3.6, <3.9"
+python = ">=3.6.2, <3.9"
 numpy = "^1.20.0"
 matplotlib = "^3.3.4"
 mplfinance = "^0.12.7-alpha.5"
@@ -21,6 +21,7 @@ SQLAlchemy = "^1.3.23"
 ta-lib = { file = "./lib/TA_Lib-0.4.19-cp38-cp38-win_amd64.whl" }
 numba = "^0.52.0"
 vectorbt = {extras = ["full"], version = "^0.17.1"}
+jupyterlab = "^3.0.12"
 
 
 [tool.poetry.dev-dependencies]

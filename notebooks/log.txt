@@ -1,67 +1,1282 @@
-[2021-03-12 00:00:00] Layout({
-    'barmode': 'overlay', 'template': '...', 'title': {'text': 'FLYBABYFLY'}
-}) layout.XAxis() ()
-[2021-03-12 00:00:00] Layout({
-    'barmode': 'overlay',
-    'template': '...',
-    'title': {'text': 'FLYBABYFLY'},
-    'xaxis': {'range': ['2018-05-15 00:05:37.7714', '2018-05-16 02:48:30']}
-}) layout.XAxis({
-    'range': ['2018-05-15 00:05:37.7714', '2018-05-16 02:48:30']
-}) ()
-[2021-03-12 00:00:00] Layout({
-    'barmode': 'overlay',
-    'template': '...',
-    'title': {'text': 'FLYBABYFLY'},
-    'xaxis': {'range': ['2018-05-15 05:22:49.9429', '2018-05-16 02:48:30']}
-}) layout.XAxis({
-    'range': ['2018-05-15 05:22:49.9429', '2018-05-16 02:48:30']
-}) ()
-[2021-03-12 00:00:00] Layout({
-    'barmode': 'overlay',
-    'template': '...',
-    'title': {'text': 'FLYBABYFLY'},
-    'xaxis': {'range': ['2018-05-15 05:22:49.9429', '2018-05-16 02:48:30']}
-}) layout.XAxis({
-    'range': ['2018-05-15 05:22:49.9429', '2018-05-16 02:48:30']
-}) ()
-[2021-03-12 00:00:00] Layout({
-    'barmode': 'overlay',
-    'template': '...',
-    'title': {'text': 'FLYBABYFLY'},
-    'xaxis': {'range': ['2018-05-15 05:22:49.9429', '2018-05-16 02:45:26.1143']}
-}) layout.XAxis({
-    'range': ['2018-05-15 05:22:49.9429', '2018-05-16 02:45:26.1143']
-}) ()
-[2021-03-12 00:00:00] Layout({
-    'barmode': 'overlay',
-    'template': '...',
-    'title': {'text': 'FLYBABYFLY'},
-    'xaxis': {'range': ['2018-05-15 05:22:49.9429', '2018-05-15 20:52:59.2571']}
-}) layout.XAxis({
-    'range': ['2018-05-15 05:22:49.9429', '2018-05-15 20:52:59.2571']
-}) ()
-[2021-03-12 00:00:00] Layout({
-    'barmode': 'overlay',
-    'template': '...',
-    'title': {'text': 'FLYBABYFLY'},
-    'xaxis': {'range': ['2018-05-15 05:22:49.9429', '2018-05-15 20:52:59.2571']}
-}) layout.XAxis({
-    'range': ['2018-05-15 05:22:49.9429', '2018-05-15 20:52:59.2571']
-}) ()
-[2021-03-12 00:00:00] Layout({
-    'barmode': 'overlay',
-    'template': '...',
-    'title': {'text': 'FLYBABYFLY'},
-    'xaxis': {'range': ['2018-05-15 05:19:46.0572', '2018-05-15 20:52:59.2571']}
-}) layout.XAxis({
-    'range': ['2018-05-15 05:19:46.0572', '2018-05-15 20:52:59.2571']
-}) ()
-[2021-03-12 00:00:00] Layout({
-    'barmode': 'overlay',
-    'template': '...',
-    'title': {'text': 'FLYBABYFLY'},
-    'xaxis': {'range': ['2018-05-15 01:42:10.1715', '2018-05-15 20:52:59.2571']}
-}) layout.XAxis({
-    'range': ['2018-05-15 01:42:10.1715', '2018-05-15 20:52:59.2571']
-}) ()
+[2021-03-24 00:00:00] Handle me bb 2018-03-08 00:01:51.1131 2021-03-10 03:30:08.8869
+[2021-03-24 00:00:00] Handle me bb 2019-06-09 00:36:27.822 2019-08-26 11:08:29.0916
+[2021-03-24 00:00:00] Handle me bb 2019-06-09 00:36:27.822 2019-08-26 11:08:29.0916
+[2021-03-24 00:00:00] Handle me bb 2019-07-16 10:27:11.0606 2019-07-25 23:24:35.5393
+[2021-03-24 00:00:00] Handle me bb 2019-07-16 10:27:11.0606 2019-07-25 23:24:35.5393
+[2021-03-24 00:00:00] Handle me bb 2018-03-08 00:01:51.1131 2021-03-10 03:30:08.8869
+[2021-03-24 00:00:00] Handle me bb 2019-06-19 15:00:15.0206 2019-08-05 06:20:54.6944
+[2021-03-24 00:00:00] Handle me bb 2019-06-19 15:00:15.0206 2019-08-05 06:20:54.6944
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 02:06:01.8376 2019-07-12 16:18:22.4232
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 02:06:01.8376 2019-07-12 16:18:22.4232
+[2021-03-24 00:00:00] Handle me bb 2018-03-08 00:01:51.1131 2021-03-10 03:30:08.8869
+[2021-03-24 00:00:00] Handle me bb 2019-05-20 22:41:38.8646 2019-07-23 13:04:22.0561
+[2021-03-24 00:00:00] Handle me bb 2019-05-20 22:41:38.8646 2019-07-23 13:04:22.0561
+[2021-03-24 00:00:00] Handle me bb 2019-06-17 10:54:11.7735 2019-06-20 21:24:36.8108
+[2021-03-24 00:00:00] Handle me bb 2019-06-17 10:54:11.7735 2019-06-20 21:24:36.8108
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-04-21 12:52:20.1863 2019-10-02 13:44:58.5178
+[2021-03-24 00:00:00] Handle me bb 2019-04-21 12:52:20.1863 2019-10-02 13:44:58.5178
+[2021-03-24 00:00:00] Handle me bb 2019-06-20 09:55:42.5385 2019-07-21 12:01:48.8352
+[2021-03-24 00:00:00] Handle me bb 2019-06-20 09:55:42.5385 2019-07-21 12:01:48.8352
+[2021-03-24 00:00:00] Handle me bb 2019-06-24 22:18:42.9715 2019-07-03 03:22:01.3281
+[2021-03-24 00:00:00] Handle me bb 2019-06-24 22:18:42.9715 2019-07-03 03:22:01.3281
+[2021-03-24 00:00:00] Handle me bb 2019-06-25 18:59:29.886 2019-06-29 07:13:00.4739
+[2021-03-24 00:00:00] Handle me bb 2019-06-25 18:59:29.886 2019-06-29 07:13:00.4739
+[2021-03-24 00:00:00] Handle me bb 2019-06-25 23:04:33.2114 2019-06-27 22:57:43.1021
+[2021-03-24 00:00:00] Handle me bb 2019-06-26 07:34:36.6202 2019-06-27 13:07:10.0609
+[2021-03-24 00:00:00] Handle me bb 2019-06-26 07:34:36.6202 2019-06-27 13:07:10.0609
+[2021-03-24 00:00:00] Handle me bb 2019-06-26 10:51:21.0145 2019-06-27 02:20:30.8019
+[2021-03-24 00:00:00] Handle me bb 2019-06-26 10:51:21.0145 2019-06-27 02:20:30.8019
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:54.1612 2021-03-10 12:07:05.8388
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:54.1612 2021-03-10 12:07:05.8388
+[2021-03-24 00:00:00] Handle me bb 2019-05-20 10:21:48.4824 2019-12-06 05:24:01.5147
+[2021-03-24 00:00:00] Handle me bb 2019-05-20 10:21:48.4824 2019-12-06 05:24:01.5147
+[2021-03-24 00:00:00] Handle me bb 2019-06-21 00:57:56.6397 2019-08-02 16:24:44.4806
+[2021-03-24 00:00:00] Handle me bb 2019-06-21 00:57:56.6397 2019-08-02 16:24:44.4806
+[2021-03-24 00:00:00] Handle me bb 2019-06-24 20:05:20.6843 2019-07-04 16:44:08.9795
+[2021-03-24 00:00:00] Handle me bb 2019-06-24 20:05:20.6843 2019-07-04 16:44:08.9795
+[2021-03-24 00:00:00] Handle me bb 2019-06-26 00:38:31.2099 2019-06-28 06:53:34.9297
+[2021-03-24 00:00:00] Handle me bb 2019-06-26 00:38:31.2099 2019-06-28 06:53:34.9297
+[2021-03-24 00:00:00] Handle me bb 2019-06-27 04:37:50.9825 2019-06-27 18:40:33.8032
+[2021-03-24 00:00:00] Handle me bb 2019-06-27 04:37:50.9825 2019-06-27 18:40:33.8032
+[2021-03-24 00:00:00] Handle me bb 2019-06-27 05:19:29.1456 2019-06-27 19:22:11.9663
+[2021-03-24 00:00:00] Handle me bb 2019-06-27 10:34:20.464 2019-06-27 14:24:10.3242
+[2021-03-24 00:00:00] Handle me bb 2019-06-27 10:34:20.464 2019-06-27 14:24:10.3242
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-01-07 08:25:23.4083 2019-07-01 11:18:20.5459
+[2021-03-24 00:00:00] Handle me bb 2019-01-07 08:25:23.4083 2019-07-01 11:18:20.5459
+[2021-03-24 00:00:00] Handle me bb 2019-02-28 06:28:37.0245 2019-04-04 13:49:56.2861
+[2021-03-24 00:00:00] Handle me bb 2019-02-28 06:28:37.0245 2019-04-04 13:49:56.2861
+[2021-03-24 00:00:00] Handle me bb 2019-03-03 23:24:05.7176 2019-03-17 10:17:05.9201
+[2021-03-24 00:00:00] Handle me bb 2019-03-03 23:24:05.7176 2019-03-17 10:17:05.9201
+[2021-03-24 00:00:00] Handle me bb 2019-03-05 06:01:52.6974 2019-03-12 20:57:18.5782
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '5e3fa2cd-2948-4dcb-b6f5-6ed2defec58e',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '5e3fa2cd-2948-4dcb-b6f5-6ed2defec58e',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-06-09 07:17:42.9335 2019-08-01 12:07:13.2032
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '5e3fa2cd-2948-4dcb-b6f5-6ed2defec58e',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-06-09 07:17:42.9335 2019-08-01 12:07:13.2032
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '5e3fa2cd-2948-4dcb-b6f5-6ed2defec58e',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'd68593f3-649a-4c86-89f8-79357b0c7198',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'd68593f3-649a-4c86-89f8-79357b0c7198',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '873925d2-4e48-4794-b50f-591b4f97fc9d',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-01-05 03:13:19.647 2019-03-30 08:51:42.574
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'd68593f3-649a-4c86-89f8-79357b0c7198',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '873925d2-4e48-4794-b50f-591b4f97fc9d',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-01-05 03:13:19.647 2019-03-30 08:51:42.574
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'd68593f3-649a-4c86-89f8-79357b0c7198',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '873925d2-4e48-4794-b50f-591b4f97fc9d',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'b082e61c-b40f-4014-8b78-b8c9c0c04a3b',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'b082e61c-b40f-4014-8b78-b8c9c0c04a3b',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-04-08 05:39:57.6189 2019-07-23 15:18:58.1582
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'b082e61c-b40f-4014-8b78-b8c9c0c04a3b',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-04-08 05:39:57.6189 2019-07-23 15:18:58.1582
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'b082e61c-b40f-4014-8b78-b8c9c0c04a3b',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '746f16c8-618f-4c60-8e5d-393f2d20dd51',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '746f16c8-618f-4c60-8e5d-393f2d20dd51',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '40c6ece7-06cb-4830-948f-33215c22d8f8',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-10-24 17:45:36.1301 2020-01-05 21:23:40.2509
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '746f16c8-618f-4c60-8e5d-393f2d20dd51',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '40c6ece7-06cb-4830-948f-33215c22d8f8',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-10-24 17:45:36.1301 2020-01-05 21:23:40.2509
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '746f16c8-618f-4c60-8e5d-393f2d20dd51',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '40c6ece7-06cb-4830-948f-33215c22d8f8',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'aba6dfea-8712-4433-b76a-90fc5fb7ad4f',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'aba6dfea-8712-4433-b76a-90fc5fb7ad4f',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '2174b3e8-ec7f-4ae3-a9a1-154f5d9ac409',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-08-28 02:31:58.338 2020-01-08 02:35:44.0121
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'aba6dfea-8712-4433-b76a-90fc5fb7ad4f',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '2174b3e8-ec7f-4ae3-a9a1-154f5d9ac409',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-08-28 02:31:58.338 2020-01-08 02:35:44.0121
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': 'aba6dfea-8712-4433-b76a-90fc5fb7ad4f',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '2174b3e8-ec7f-4ae3-a9a1-154f5d9ac409',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '31ab2fad-8d93-4338-88a2-561c16daa6bb',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '31ab2fad-8d93-4338-88a2-561c16daa6bb',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '40a3a478-1ca8-42fd-8b53-01c411419f27',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-08-05 22:31:20.7256 2019-11-20 08:10:21.2649
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '31ab2fad-8d93-4338-88a2-561c16daa6bb',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '40a3a478-1ca8-42fd-8b53-01c411419f27',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-08-05 22:31:20.7256 2019-11-20 08:10:21.2649
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '31ab2fad-8d93-4338-88a2-561c16daa6bb',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': '40a3a478-1ca8-42fd-8b53-01c411419f27',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '4de77cc3-ec36-4c7c-b8ce-920fdb99597e',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '4de77cc3-ec36-4c7c-b8ce-920fdb99597e',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': 'c9650858-5e06-4129-abbf-54f03154d37a',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-06-02 15:41:31.6498 2020-01-05 21:23:40.2509
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '4de77cc3-ec36-4c7c-b8ce-920fdb99597e',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': 'c9650858-5e06-4129-abbf-54f03154d37a',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Handle me bb 2019-06-02 15:41:31.6498 2020-01-05 21:23:40.2509
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '4de77cc3-ec36-4c7c-b8ce-920fdb99597e',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Scattergl({
+    'marker': {'color': 'green'},
+    'mode': 'lines',
+    'name': 'Aroon Up',
+    'uid': 'c9650858-5e06-4129-abbf-54f03154d37a',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x2',
+    'y': array([ nan,  nan,   0., ...,   0., 100., 100.]),
+    'yaxis': 'y2'
+})
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '6d12a8b3-da1c-402f-9c5f-07d13859d120',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '6d12a8b3-da1c-402f-9c5f-07d13859d120',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-05-12 19:56:20.0507 2021-05-16 07:39:25.6235
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '6d12a8b3-da1c-402f-9c5f-07d13859d120',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-05-12 19:56:20.0507 2021-05-16 07:39:25.6235
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '6d12a8b3-da1c-402f-9c5f-07d13859d120',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-12-27 06:25:04.6021 2019-04-14 21:16:08.9027
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '6d12a8b3-da1c-402f-9c5f-07d13859d120',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-12-27 06:25:04.6021 2019-04-14 21:16:08.9027
+[2021-03-24 00:00:00] Candlestick({
+    'close': array([ 8462.8,  8344.9,  8064. , ..., 27376.2, 28879.9, 28959.2]),
+    'high': array([ 8862. ,  8494. ,  8500. , ..., 27400. , 28972.1, 29291.7]),
+    'hoverinfo': 'all',
+    'low': array([ 8421. ,  8077.3,  7978.8, ..., 25850. , 27346. , 27844. ]),
+    'open': array([ 8661.6,  8473.1,  8345.8, ..., 27028.9, 27376.2, 28880. ]),
+    'uid': '6d12a8b3-da1c-402f-9c5f-07d13859d120',
+    'x': array([datetime.datetime(2018, 5, 15, 0, 0),
+                datetime.datetime(2018, 5, 16, 0, 0),
+                datetime.datetime(2018, 5, 17, 0, 0), ...,
+                datetime.datetime(2020, 12, 29, 0, 0),
+                datetime.datetime(2020, 12, 30, 0, 0),
+                datetime.datetime(2020, 12, 31, 0, 0)], dtype=object),
+    'xaxis': 'x',
+    'yaxis': 'y'
+})
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2020-07-21 04:17:15.0009 2020-11-20 02:20:41.8688
+[2021-03-24 00:00:00] Handle me bb 2020-07-21 04:17:15.0009 2020-11-20 02:20:41.8688
+[2021-03-24 00:00:00] Handle me bb 2020-08-07 09:32:47.3067 2020-09-17 16:37:49.6329
+[2021-03-24 00:00:00] Handle me bb 2020-08-07 09:32:47.3067 2020-09-17 16:37:49.6329
+[2021-03-24 00:00:00] Handle me bb 2020-08-20 13:21:31.5649 2020-09-02 07:04:34.3389
+[2021-03-24 00:00:00] Handle me bb 2020-08-20 13:21:31.5649 2020-09-02 07:04:34.3389
+[2021-03-24 00:00:00] Handle me bb 2020-08-25 22:12:40.7846 2020-08-30 07:36:35.5716
+[2021-03-24 00:00:00] Handle me bb 2020-08-25 22:12:40.7846 2020-08-30 07:36:35.5716
+[2021-03-24 00:00:00] Handle me bb 2020-08-26 16:42:34.7212 2020-08-29 01:14:01.9255
+[2021-03-24 00:00:00] Handle me bb 2020-08-26 16:42:34.7212 2020-08-29 01:14:01.9255
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 06:50:47.894 2020-08-27 23:08:34.5678
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 06:50:47.894 2020-08-27 23:08:34.5678
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 12:31:56.4237 2020-08-27 15:29:21.5863
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 12:31:56.4237 2020-08-27 15:29:21.5863
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 13:09:31.054 2020-08-27 13:59:35.737
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 13:09:31.054 2020-08-27 13:59:35.737
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 12:39:37.9367 2020-08-27 13:29:42.6197
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 12:39:37.9367 2020-08-27 13:29:42.6197
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 12:18:37.9083 2020-08-27 13:08:42.5913
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 11:51:28.3524 2020-08-27 12:41:33.0354
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 11:25:25.4326 2020-08-27 12:15:30.1156
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 10:43:37.4915 2020-08-27 11:33:42.1745
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 10:08:47.5406 2020-08-27 10:58:52.2236
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 09:35:40.5728 2020-08-27 10:25:45.2558
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 08:59:07.6388 2020-08-27 09:49:12.3218
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 08:13:59.7894 2020-08-27 09:04:04.4724
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 07:17:27.4054 2020-08-27 08:07:32.0884
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 06:46:33.7098 2020-08-27 07:36:38.3928
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 06:20:55.0213 2020-08-27 07:10:59.7043
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 05:49:43.1523 2020-08-27 06:39:47.8353
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 04:48:19.9925 2020-08-27 05:38:24.6755
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 04:48:19.9925 2020-08-27 05:38:24.6755
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 04:23:17.651 2020-08-27 06:03:27.017
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 04:23:17.651 2020-08-27 06:03:27.017
+[2021-03-24 00:00:00] Handle me bb 2020-08-27 03:33:12.968 2020-08-27 06:53:31.7
+[2021-03-24 00:00:00] Handle me bb 2020-08-26 22:32:44.87 2020-08-27 11:53:59.798
+[2021-03-24 00:00:00] Handle me bb 2020-08-26 15:52:07.406 2020-08-27 18:34:37.262
+[2021-03-24 00:00:00] Handle me bb 2020-08-26 02:30:52.478 2020-08-28 07:55:52.19
+[2021-03-24 00:00:00] Handle me bb 2020-08-26 02:30:52.478 2020-08-28 07:55:52.19
+[2021-03-24 00:00:00] Handle me bb 2020-08-24 23:48:22.622 2020-08-29 10:38:22.046
+[2021-03-24 00:00:00] Handle me bb 2020-08-22 18:23:22.91 2020-08-31 16:03:21.758
+[2021-03-24 00:00:00] Handle me bb 2020-08-22 18:23:22.91 2020-08-31 16:03:21.758
+[2021-03-24 00:00:00] Handle me bb 2020-04-06 18:33:40.766 2021-01-16 15:53:03.902
+[2021-03-24 00:00:00] Handle me bb 2020-04-06 18:33:40.766 2021-01-16 15:53:03.902
+[2021-03-24 00:00:00] Handle me bb 2020-04-04 13:21:37.0048 2021-01-14 10:41:00.1408
+[2021-03-24 00:00:00] Handle me bb 2018-03-21 17:48:33.2296 2018-12-31 15:07:56.3656
+[2021-03-24 00:00:00] Handle me bb 2018-07-10 13:51:41.2914 2019-04-21 11:11:04.4274
+[2021-03-24 00:00:00] Handle me bb 2018-07-10 13:51:41.2914 2019-04-21 11:11:04.4274
+[2021-03-24 00:00:00] Handle me bb 2018-07-10 13:51:41.2914 2019-04-14 19:34:53.1437
+[2021-03-24 00:00:00] Handle me bb 2018-07-10 13:51:41.2914 2018-09-09 13:52:44.5426
+[2021-03-24 00:00:00] Handle me bb 2018-07-10 13:51:41.2914 2018-09-09 13:52:44.5426
+[2021-03-24 00:00:00] Handle me bb 2018-10-20 13:06:34.3082 2018-12-20 13:07:37.5594
+[2021-03-24 00:00:00] Handle me bb 2019-02-08 09:09:42.37 2019-04-10 09:10:45.6212
+[2021-03-24 00:00:00] Handle me bb 2019-02-08 09:09:42.37 2019-04-10 09:10:45.6212
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2018-12-07 04:50:13.6068 2020-06-08 22:41:46.3932
+[2021-03-24 00:00:00] Handle me bb 2018-12-07 04:50:13.6068 2020-06-08 22:41:46.3932
+[2021-03-24 00:00:00] Handle me bb 2018-12-07 04:50:13.6068 2020-06-08 22:41:46.3932
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2020-08-18 23:54:03.8969 2021-01-05 15:34:00.8547
+[2021-03-24 00:00:00] Handle me bb 2020-08-18 23:54:03.8969 2021-01-05 15:34:00.8547
+[2021-03-24 00:00:00] Handle me bb 2020-10-28 16:21:29.4543 2020-11-26 23:07:36.5584
+[2021-03-24 00:00:00] Handle me bb 2020-10-28 16:21:29.4543 2020-11-26 23:07:36.5584
+[2021-03-24 00:00:00] Handle me bb 2020-11-10 01:58:30.5969 2020-11-18 11:10:15.6952
+[2021-03-24 00:00:00] Handle me bb 2020-11-10 01:58:30.5969 2020-11-18 11:10:15.6952
+[2021-03-24 00:00:00] Handle me bb 2020-11-12 07:08:04.991 2020-11-16 23:29:46.0237
+[2021-03-24 00:00:00] Handle me bb 2020-11-12 07:08:04.991 2020-11-16 23:29:46.0237
+[2021-03-24 00:00:00] Handle me bb 2020-11-12 23:27:25.3665 2020-11-16 06:44:39.5629
+[2021-03-24 00:00:00] Handle me bb 2020-11-12 23:27:25.3665 2020-11-16 06:44:39.5629
+[2021-03-24 00:00:00] Handle me bb 2020-11-10 18:15:21.6053 2020-11-16 06:44:39.5629
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2020-11-16 06:44:39.5629
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2020-11-16 06:44:39.5629
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2020-10-31 18:20:13.2343
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-05-17 23:54:49.9339
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-05-17 23:54:49.9339
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-05-02 11:30:23.6052
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-05-02 11:30:23.6052
+[2021-03-24 00:00:00] Handle me bb 2018-03-16 04:42:42.2585 2018-05-11 08:18:38.6501
+[2021-03-24 00:00:00] Handle me bb 2018-04-16 05:31:34.9158 2018-06-11 09:07:31.3074
+[2021-03-24 00:00:00] Handle me bb 2018-04-14 00:19:31.1546 2018-06-09 03:55:27.5462
+[2021-03-24 00:00:00] Handle me bb 2018-05-01 17:56:01.2445 2018-06-26 21:31:57.6361
+[2021-03-24 00:00:00] Handle me bb 2018-04-27 07:31:53.722 2018-06-22 11:07:50.1136
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-04-23 14:42:08.5603
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-04-03 15:53:34.7092
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-04-03 15:53:34.7092
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-04-30 06:18:19.844
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-04-30 06:18:19.844
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-04-19 04:18:01.0378
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-04-19 04:18:01.0378
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-04-08 02:17:42.2316
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-04-08 02:17:42.2316
+[2021-03-24 00:00:00] Handle me bb 2018-03-13 23:30:38.4973 2018-04-08 02:17:42.2316
+[2021-03-24 00:00:00] Handle me bb 2018-04-05 03:31:16.1097 2018-04-08 02:17:42.2316
+[2021-03-24 00:00:00] Handle me bb 2018-03-27 06:43:01.0647 2018-04-08 02:17:42.2316
+[2021-03-24 00:00:00] Handle me bb 2018-03-27 06:43:01.0647 2018-04-08 02:17:42.2316
+[2021-03-24 00:00:00] Handle me bb 2018-04-08 02:17:42.2316 2018-04-29 12:43:57.4833
+[2021-03-24 00:00:00] Handle me bb 2018-04-08 02:17:42.2316 2018-05-01 17:56:01.2445
+[2021-03-24 00:00:00] Handle me bb 2018-04-08 02:17:42.2316 2018-05-10 14:44:16.2894
+[2021-03-24 00:00:00] Handle me bb 2018-04-08 02:17:42.2316 2018-05-10 14:44:16.2894
+[2021-03-24 00:00:00] Handle me bb 2018-03-12 11:52:57.0968 2018-04-14 00:19:31.1546
+[2021-03-24 00:00:00] Handle me bb 2018-03-12 11:52:57.0968 2018-04-14 00:19:31.1546
+[2021-03-24 00:00:00] Handle me bb 2018-02-24 05:39:40.0679 2018-04-30 06:32:48.1835
+[2021-03-24 00:00:00] Handle me bb 2018-02-24 05:39:40.0679 2018-04-30 06:32:48.1835
+[2021-03-24 00:00:00] Handle me bb 2018-01-22 17:13:06.0101 2018-06-01 18:59:22.2413
+[2021-03-24 00:00:00] Handle me bb 2017-07-11 14:33:41.6633 2018-12-13 21:38:46.5881
+[2021-03-24 00:00:00] Handle me bb 2017-07-11 14:33:41.6633 2018-12-13 21:38:46.5881
+[2021-03-24 00:00:00] Handle me bb 2016-10-24 11:01:09.2009 2019-08-31 01:11:19.0505
+[2021-03-24 00:00:00] Handle me bb 2015-05-23 03:56:04.2761 2021-02-01 08:16:23.9753
+[2021-03-24 00:00:00] Handle me bb 2015-05-23 03:56:04.2761 2021-02-01 08:16:23.9753
+[2021-03-24 00:00:00] Handle me bb 2012-07-16 13:45:54.4265 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2012-07-16 13:45:54.4265 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2012-07-24 23:10:10.9575 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2015-09-09 06:11:39.1797 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2015-09-09 06:11:39.1797 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2017-06-08 00:32:13.7316 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2017-09-25 08:28:53.9405 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2018-01-12 16:25:34.1494 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2017-11-19 00:27:14.045 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2017-11-19 00:27:14.045 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2018-02-20 15:01:48.1486 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2018-01-24 21:09:04.119 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2018-01-24 21:09:04.119 2023-12-08 22:26:33.8249
+[2021-03-24 00:00:00] Handle me bb 2018-01-24 21:09:04.119 2021-05-06 06:23:18.8943
+[2021-03-24 00:00:00] Handle me bb 2018-01-24 21:09:04.119 2021-05-06 06:23:18.8943
+[2021-03-24 00:00:00] Handle me bb 2019-04-21 10:34:16.8758 2019-12-01 22:48:12.1462
+[2021-03-24 00:00:00] Handle me bb 2019-04-21 10:34:16.8758 2019-12-01 22:48:12.1462
+[2021-03-24 00:00:00] Handle me bb 2019-04-10 08:33:58.0696 2019-11-20 20:47:53.34
+[2021-03-24 00:00:00] Handle me bb 2018-10-19 10:53:04.6933 2019-05-31 23:06:59.9637
+[2021-03-24 00:00:00] Handle me bb 2018-07-09 11:38:11.6765 2019-02-18 23:52:06.9469
+[2021-03-24 00:00:00] Handle me bb 2018-07-09 11:38:11.6765 2019-02-18 23:52:06.9469
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-09-19 00:59:47.4217
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-09-19 00:59:47.4217
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-09-16 19:47:43.6605
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2018-07-23 09:46:09.6296
+[2021-03-24 00:00:00] Handle me bb 2018-10-19 10:24:50.8596 2019-03-06 12:16:33.2756
+[2021-03-24 00:00:00] Handle me bb 2018-10-19 10:24:50.8596 2019-03-06 12:16:33.2756
+[2021-03-24 00:00:00] Handle me bb 2018-08-22 19:11:13.0675 2019-01-07 21:02:55.4835
+[2021-03-24 00:00:00] Handle me bb 2018-08-22 19:11:13.0675 2019-01-07 21:02:55.4835
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:54.1612 2021-03-10 12:07:05.8388
+[2021-03-24 00:00:00] Handle me bb 2018-08-24 03:29:15.265 2020-11-17 16:35:42.4404
+[2021-03-24 00:00:00] Handle me bb 2018-08-24 03:29:15.265 2020-11-17 16:35:42.4404
+[2021-03-24 00:00:00] Handle me bb 2019-04-10 09:05:19.2062 2020-09-23 21:48:39.538
+[2021-03-24 00:00:00] Handle me bb 2019-04-10 09:05:19.2062 2020-09-23 21:48:39.538
+[2021-03-24 00:00:00] Handle me bb 2019-12-04 06:47:25.1518 2020-03-19 13:52:59.2101
+[2021-03-24 00:00:00] Handle me bb 2019-12-04 06:47:25.1518 2020-03-19 13:52:59.2101
+[2021-03-24 00:00:00] Handle me bb 2020-01-19 07:10:55.3931 2020-02-06 13:48:31.249
+[2021-03-24 00:00:00] Handle me bb 2020-01-19 07:10:55.3931 2020-02-06 13:48:31.249
+[2021-03-24 00:00:00] Handle me bb 2019-12-30 18:12:56.3061 2020-01-18 00:50:32.162
+[2021-03-24 00:00:00] Handle me bb 2019-12-30 18:12:56.3061 2020-01-18 00:50:32.162
+[2021-03-24 00:00:00] Handle me bb 2019-12-09 11:38:25.3592 2019-12-27 18:16:01.2151
+[2021-03-24 00:00:00] Handle me bb 2019-11-17 02:11:33.8362 2019-12-05 08:49:09.6921
+[2021-03-24 00:00:00] Handle me bb 2019-11-14 22:04:21.9554 2019-12-05 08:49:09.6921
+[2021-03-24 00:00:00] Handle me bb 2019-07-03 06:38:05.3467 2019-12-05 08:49:09.6921
+[2021-03-24 00:00:00] Handle me bb 2019-07-03 06:38:05.3467 2019-12-05 08:49:09.6921
+[2021-03-24 00:00:00] Handle me bb 2019-07-01 02:30:53.4659 2019-12-03 04:41:57.8113
+[2021-03-24 00:00:00] Handle me bb 2018-08-02 20:09:35.7057 2019-01-04 22:20:40.0511
+[2021-03-24 00:00:00] Handle me bb 2018-07-25 03:40:48.1826 2018-12-27 05:51:52.528
+[2021-03-24 00:00:00] Handle me bb 2018-04-24 22:38:29.1896 2018-09-27 00:49:33.535
+[2021-03-24 00:00:00] Handle me bb 2018-04-18 10:16:53.5472 2018-09-20 12:27:57.8926
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:54.1612 2018-08-08 02:04:00.2769
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:54.1612 2018-05-17 13:30:28.807
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:54.1612 2018-05-17 13:30:28.807
+[2021-03-24 00:00:00] Handle me bb 2018-08-06 15:48:45.8162 2018-10-16 13:54:20.462
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:54.1612 2018-03-07 15:24:54.1612
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:54.1612 2018-03-07 15:24:54.1612
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:54.1612 2018-03-13 09:54:32.3834
+[2021-03-24 00:00:00] Handle me bb 2018-07-07 06:07:59.4852 2018-09-16 04:13:34.131
+[2021-03-24 00:00:00] Handle me bb 2018-05-05 06:39:14.9424 2018-07-15 04:44:49.5882
+[2021-03-24 00:00:00] Handle me bb 2018-05-05 06:39:14.9424 2018-07-15 04:44:49.5882
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:52.1612 2018-03-07 15:24:52.1612
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 15:24:52.1612 2018-03-07 15:24:52.1612
+[2021-03-24 00:00:00] Handle me bb -363.4871841744178 -321.3693246124399
+[2021-03-24 00:00:00] Handle me bb -363.4871841744178 794.7539537799738
+[2021-03-24 00:00:00] Handle me bb -363.4871841744178 794.7539537799738
+[2021-03-24 00:00:00] Handle me bb -300.31039483145094 857.9307431229405
+[2021-03-24 00:00:00] Handle me bb 857.9307431229405 2016.1718810773323
+[2021-03-24 00:00:00] Handle me bb 836.8718133419515 1995.1129512963435
+[2021-03-24 00:00:00] Handle me bb 120.86820078832773 1279.1093387427195
+[2021-03-24 00:00:00] Handle me bb -458.25236818886816 1858.2299077199154
+[2021-03-24 00:00:00] Handle me bb -458.25236818886816 1858.2299077199154
+[2021-03-24 00:00:00] Handle me bb -395.07557884590136 1921.4066970628824
+[2021-03-24 00:00:00] Handle me bb 2195.172784215738 4511.655060124521
+[2021-03-24 00:00:00] Handle me bb 4237.888972971665 6554.371248880449
+[2021-03-24 00:00:00] Handle me bb 4258.947902752654 6575.430178661437
+[2021-03-24 00:00:00] Handle me bb 4364.242551657599 6680.7248275663815
+[2021-03-24 00:00:00] Handle me bb 4406.360411219576 6722.842687128359
+[2021-03-24 00:00:00] Handle me bb 6596.489108442426 8912.971384351209
+[2021-03-24 00:00:00] Handle me bb 6722.842687128359 9039.324963037143
+[2021-03-24 00:00:00] Handle me bb 7417.787369900994 9734.269645809778
+[2021-03-24 00:00:00] Handle me bb 7375.669510339017 9692.151786247801
+[2021-03-24 00:00:00] Handle me bb 3353.41392217013 5669.896198078914
+[2021-03-24 00:00:00] Handle me bb 3374.4728519511186 5690.955127859902
+[2021-03-24 00:00:00] Handle me bb 3858.828236913864 6175.310512822649
+[2021-03-24 00:00:00] Handle me bb 3943.0639560378204 6259.546231946604
+[2021-03-24 00:00:00] Handle me bb 3943.0639560378204 6259.546231946604
+[2021-03-24 00:00:00] Handle me bb -659.409234590201 9996.4092345902
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-04-14 21:16:08.9026 2020-01-12 12:59:51.5346
+[2021-03-24 00:00:00] Handle me bb 2019-04-14 21:16:08.9026 2020-01-12 12:59:51.5346
+[2021-03-24 00:00:00] Handle me bb 2019-06-09 23:38:33.0502 2019-08-20 10:43:57.5303
+[2021-03-24 00:00:00] Handle me bb 2019-06-09 23:38:33.0502 2019-08-20 10:43:57.5303
+[2021-03-24 00:00:00] Handle me bb 2019-07-04 08:11:53.2102 2019-07-21 15:08:21.3908
+[2021-03-24 00:00:00] Handle me bb 2019-07-04 08:11:53.2102 2019-07-21 15:08:21.3908
+[2021-03-24 00:00:00] Handle me bb 2019-07-07 17:23:22.0614 2019-07-12 18:41:34.1706
+[2021-03-24 00:00:00] Handle me bb 2019-07-07 17:23:22.0614 2019-07-12 18:41:34.1706
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2017-02-07 23:19:21.4749 2020-02-12 11:02:27.0477
+[2021-03-24 00:00:00] Handle me bb 2017-02-07 23:19:21.4749 2020-02-12 11:02:27.0477
+[2021-03-24 00:00:00] Handle me bb 2015-09-17 03:04:56.3907 2018-09-20 14:48:01.9635
+[2021-03-24 00:00:00] Handle me bb 2015-09-17 03:04:56.3907 2018-09-20 14:48:01.9635
+[2021-03-24 00:00:00] Handle me bb 2017-10-09 19:26:15.2108 2020-10-13 07:09:20.7836
+[2021-03-24 00:00:00] Handle me bb 2017-10-09 19:26:15.2108 2020-10-13 07:09:20.7836
+[2021-03-24 00:00:00] Handle me bb 2019-08-12 11:21:14.8652 2022-08-15 23:04:20.438
+[2021-03-24 00:00:00] Handle me bb 2019-08-12 11:21:14.8652 2022-08-15 23:04:20.438
+[2021-03-24 00:00:00] Handle me bb 2019-03-25 19:41:17.9074 2022-03-29 07:24:23.4802
+[2021-03-24 00:00:00] Handle me bb 2019-03-25 19:41:17.9074 2022-03-29 07:24:23.4802
+[2021-03-24 00:00:00] Handle me bb 2018-06-21 17:33:27.753 2021-06-25 05:16:33.3258
+[2021-03-24 00:00:00] Handle me bb 2018-06-21 17:33:27.753 2021-06-25 05:16:33.3258
+[2021-03-24 00:00:00] Handle me bb 2017-12-26 09:28:26.8542 2020-12-29 21:11:32.427
+[2021-03-24 00:00:00] Handle me bb 2017-12-26 09:28:26.8542 2020-12-29 21:11:32.427
+[2021-03-24 00:00:00] Handle me bb 2018-05-03 23:08:05.0059 2021-05-07 10:51:10.5787
+[2021-03-24 00:00:00] Handle me bb 2018-05-03 23:08:05.0059 2021-05-07 10:51:10.5787
+[2021-03-24 00:00:00] Handle me bb 2018-09-20 14:48:01.9637 2021-09-24 02:31:07.5365
+[2021-03-24 00:00:00] Handle me bb 2018-09-20 14:48:01.9637 2021-09-24 02:31:07.5365
+[2021-03-24 00:00:00] Handle me bb 2020-09-25 16:19:07.8381 2021-02-16 18:23:12.3184
+[2021-03-24 00:00:00] Handle me bb 2020-09-25 16:19:07.8381 2021-02-16 18:23:12.3184
+[2021-03-24 00:00:00] Handle me bb 2020-11-22 19:03:51.3269 2021-01-02 04:09:35.647
+[2021-03-24 00:00:00] Handle me bb 2020-11-22 19:03:51.3269 2021-01-02 04:09:35.647
+[2021-03-24 00:00:00] Handle me bb 2020-12-11 08:38:14.7259 2020-12-27 03:40:43.9156
+[2021-03-24 00:00:00] Handle me bb 2020-12-11 08:38:14.7259 2020-12-27 03:40:43.9156
+[2021-03-24 00:00:00] Handle me bb 2020-12-10 10:28:32.616 2020-12-26 05:31:01.8057
+[2021-03-24 00:00:00] Handle me bb 2020-12-15 01:19:26.4802 2020-12-22 22:04:49.9678
+[2021-03-24 00:00:00] Handle me bb 2020-12-15 01:19:26.4802 2020-12-22 22:04:49.9678
+[2021-03-24 00:00:00] Handle me bb 2020-12-16 02:50:28.3198 2020-12-18 15:43:49.4448
+[2021-03-24 00:00:00] Handle me bb 2020-12-16 02:50:28.3198 2020-12-18 15:43:49.4448
+[2021-03-24 00:00:00] Handle me bb 2020-12-16 21:15:42.0047 2020-12-18 05:25:29.6957
+[2021-03-24 00:00:00] Handle me bb 2020-12-16 21:15:42.0047 2020-12-18 05:25:29.6957
+[2021-03-24 00:00:00] Handle me bb 2020-12-16 21:15:42.0047 2020-12-17 17:18:08.0295
+[2021-03-24 00:00:00] Handle me bb 2020-12-16 21:15:42.0047 2020-12-17 17:18:08.0295
+[2021-03-24 00:00:00] Handle me bb 2020-12-17 06:55:13.4931 2020-12-17 13:08:33.6702
+[2021-03-24 00:00:00] Handle me bb 2020-12-17 06:55:13.4931 2020-12-17 13:08:33.6702
+[2021-03-24 00:00:00] Handle me bb 2020-12-17 08:45:09.4462 2020-12-17 11:34:30.8169
+[2021-03-24 00:00:00] Handle me bb 2020-12-17 08:45:09.4462 2020-12-17 11:34:30.8169
+[2021-03-24 00:00:00] Handle me bb 2020-12-17 09:56:52.7067 2020-12-17 11:03:07.1137
+[2021-03-24 00:00:00] Handle me bb 2020-12-17 09:56:52.7067 2020-12-17 11:03:07.1137
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-05-09 06:28:50.2762 2019-10-31 09:21:47.4138
+[2021-03-24 00:00:00] Handle me bb 2019-05-09 06:28:50.2762 2019-10-31 09:21:47.4138
+[2021-03-24 00:00:00] Handle me bb 2019-07-04 01:44:36.6111 2019-08-19 07:46:44.4439
+[2021-03-24 00:00:00] Handle me bb 2019-07-04 01:44:36.6111 2019-08-19 07:46:44.4439
+[2021-03-24 00:00:00] Handle me bb 2019-07-17 12:07:42.4583 2019-08-04 12:03:27.361
+[2021-03-24 00:00:00] Handle me bb 2019-07-17 12:07:42.4583 2019-08-04 12:03:27.361
+[2021-03-24 00:00:00] Handle me bb 2019-07-18 21:15:54.6132 2019-07-26 19:58:32.9473
+[2021-03-24 00:00:00] Handle me bb 2019-07-18 21:15:54.6132 2019-07-26 19:58:32.9473
+[2021-03-24 00:00:00] Handle me bb 2019-07-21 18:06:36.7645 2019-07-25 09:00:23.7474
+[2021-03-24 00:00:00] Handle me bb 2019-07-21 18:06:36.7645 2019-07-25 09:00:23.7474
+[2021-03-24 00:00:00] Handle me bb 2019-07-22 03:45:18.0958 2019-07-23 17:46:19.9008
+[2021-03-24 00:00:00] Handle me bb 2019-07-22 03:45:18.0958 2019-07-23 17:46:19.9008
+[2021-03-24 00:00:00] Handle me bb 2019-07-22 14:33:58.7493 2019-07-23 15:28:36.3433
+[2021-03-24 00:00:00] Handle me bb 2019-07-22 16:25:37.8271 2019-07-23 11:27:41.6338
+[2021-03-24 00:00:00] Handle me bb 2019-07-22 16:25:37.8271 2019-07-23 11:27:41.6338
+[2021-03-24 00:00:00] Handle me bb 2019-07-22 18:43:54.1941 2019-07-23 05:12:29.9184
+[2021-03-24 00:00:00] Handle me bb 2019-07-22 18:43:54.1941 2019-07-23 05:12:29.9184
+[2021-03-24 00:00:00] Handle me bb 2019-07-22 21:05:54.6092 2019-07-23 03:07:05.9427
+[2021-03-24 00:00:00] Handle me bb 2019-07-22 21:05:54.6092 2019-07-23 03:07:05.9427
+[2021-03-24 00:00:00] Handle me bb 2019-07-23 01:50:38.2612 2019-07-23 07:51:49.5947
+[2021-03-24 00:00:00] Handle me bb 2019-07-23 01:50:38.2612 2019-07-23 07:51:49.5947
+[2021-03-24 00:00:00] Handle me bb 2019-07-23 07:48:11.1337 2019-07-23 13:49:22.4672
+[2021-03-24 00:00:00] Handle me bb 2019-07-23 07:48:11.1337 2019-07-23 13:49:22.4672
+[2021-03-24 00:00:00] Handle me bb 2019-07-23 11:31:44.6405 2019-07-23 17:32:55.974
+[2021-03-24 00:00:00] Handle me bb 2019-07-23 17:02:20.9014 2019-07-23 23:03:32.2349
+[2021-03-24 00:00:00] Handle me bb 2019-07-23 17:02:20.9014 2019-07-26 04:15:35.9961
+[2021-03-24 00:00:00] Handle me bb 2019-07-23 17:02:20.9014 2020-06-07 04:00:33.8528
+[2021-03-24 00:00:00] Handle me bb 2019-07-23 17:02:20.9014 2020-06-07 04:00:33.8528
+[2021-03-24 00:00:00] Handle me bb 2019-06-29 05:39:01.0382 2020-05-13 16:37:13.9896
+[2021-03-24 00:00:00] Handle me bb 2019-07-09 12:58:18.8753 2020-05-23 23:56:31.8267
+[2021-03-24 00:00:00] Handle me bb 2019-07-09 12:58:18.8753 2020-05-23 23:56:31.8267
+[2021-03-24 00:00:00] Handle me bb 2019-06-06 16:38:03.2694 2020-04-21 03:36:16.2208
+[2021-03-24 00:00:00] Handle me bb 2019-06-06 16:38:03.2694 2020-04-21 03:36:16.2208
+[2021-03-24 00:00:00] Handle me bb 2019-05-28 16:13:40.1619 2020-04-12 03:11:53.1133
+[2021-03-24 00:00:00] Handle me bb 2019-05-28 16:13:40.1619 2020-04-12 03:11:53.1133
+[2021-03-24 00:00:00] Handle me bb 2018-12-19 22:44:33.6862 2020-09-18 20:40:59.589
+[2021-03-24 00:00:00] Handle me bb 2018-02-03 11:46:20.7348 2021-08-04 07:39:12.5404
+[2021-03-24 00:00:00] Handle me bb 2018-02-03 11:46:20.7348 2021-08-04 07:39:12.5404
+[2021-03-24 00:00:00] Handle me bb 2012-11-04 17:57:03.0264 2026-11-03 01:28:30.2488
+[2021-03-24 00:00:00] Handle me bb 2005-11-06 02:11:19.4152 2033-11-01 17:14:13.86
+[2021-03-24 00:00:00] Handle me bb 2005-11-06 02:11:19.4152 2033-11-01 17:14:13.86
+[2021-03-24 00:00:00] Handle me bb 1991-11-08 18:39:52.1928 2047-10-31 00:45:41.0824
+[2021-03-24 00:00:00] Handle me bb 1991-11-08 18:39:52.1928 2047-10-31 00:45:41.0824
+[2021-03-24 00:00:00] Handle me bb 1963-11-13 03:36:57.748 2075-10-26 15:48:35.5272
+[2021-03-24 00:00:00] Handle me bb 1963-11-13 03:36:57.748 2075-10-26 15:48:35.5272
+[2021-03-24 00:00:00] Handle me bb 1963-11-13 03:36:57.748 2075-10-26 15:48:35.5272
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2018-01-15 08:17:00.7052 2021-01-18 20:00:06.278
+[2021-03-24 00:00:00] Handle me bb 2018-01-15 08:17:00.7052 2021-01-18 20:00:06.278
+[2021-03-24 00:00:00] Handle me bb 2018-06-17 07:09:20.2304 2021-06-20 18:52:25.8032
+[2021-03-24 00:00:00] Handle me bb 2018-06-17 07:09:20.2304 2021-06-20 18:52:25.8032
+[2021-03-24 00:00:00] Handle me bb 2018-01-26 10:17:19.5113 2021-01-29 22:00:25.0841
+[2021-03-24 00:00:00] Handle me bb 2018-01-26 10:17:19.5113 2021-01-29 22:00:25.0841
+[2021-03-24 00:00:00] Handle me bb 2018-01-26 10:17:19.5113 2021-01-29 22:00:25.0841
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2018-03-16 04:42:42.2585 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-10-13 12:59:00.1798 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-01 22:49:17.7415
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2019-10-17 23:23:07.7022
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-05-20 05:42:51.9382 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-04-17 02:28:12.6639 2020-03-01 07:25:14.2818
+[2021-03-24 00:00:00] Handle me bb 2019-04-17 02:28:12.6639 2020-03-01 07:25:14.2818
+[2021-03-24 00:00:00] Handle me bb 2018-07-16 05:32:26.2707 2019-05-31 10:29:27.8886
+[2021-03-24 00:00:00] Handle me bb 2018-07-18 10:44:30.0319 2019-06-02 15:41:31.6498
+[2021-03-24 00:00:00] Handle me bb 2020-01-03 16:11:36.4897 2020-11-17 21:08:38.1076
+[2021-03-24 00:00:00] Handle me bb 2020-05-27 12:13:39.4187 2020-09-29 08:38:51.9064
+[2021-03-24 00:00:00] Handle me bb 2020-05-27 12:13:39.4187 2020-09-29 08:38:51.9064
+[2021-03-24 00:00:00] Handle me bb 2020-05-18 15:25:24.3738 2020-09-20 11:50:36.8615
+[2021-03-24 00:00:00] Handle me bb 2019-11-10 00:08:00.9075 2020-03-13 20:33:13.3952
+[2021-03-24 00:00:00] Handle me bb 2019-07-06 15:40:26.5171 2019-11-08 12:05:39.0048
+[2021-03-24 00:00:00] Handle me bb 2019-07-06 15:40:26.5171 2019-11-08 12:05:39.0048
+[2021-03-24 00:00:00] Handle me bb 2018-04-14 21:03:46.7475 2018-08-17 17:28:59.2352
+[2021-03-24 00:00:00] Handle me bb 2018-04-23 17:52:01.7925 2018-08-26 14:17:14.2802
+[2021-03-24 00:00:00] Handle me bb 2018-09-28 03:08:28.8402 2019-01-30 23:33:41.3279
+[2021-03-24 00:00:00] Handle me bb 2018-11-22 13:10:02.8711 2019-03-27 09:35:15.3588
+[2021-03-24 00:00:00] Handle me bb 2019-03-11 04:01:07.1716 2019-07-14 00:26:19.6593
+[2021-03-24 00:00:00] Handle me bb 2019-08-06 16:29:19.1744 2019-12-09 12:54:31.6621
+[2021-03-24 00:00:00] Handle me bb 2019-08-26 15:17:53.0255 2019-12-29 11:43:05.5132
+[2021-03-24 00:00:00] Handle me bb 2019-09-28 21:18:49.444 2020-01-31 17:44:01.9317
+[2021-03-24 00:00:00] Handle me bb 2019-07-26 14:29:00.3682 2019-11-28 10:54:12.8559
+[2021-03-24 00:00:00] Handle me bb 2018-05-09 06:16:28.1211 2018-09-11 02:41:40.6088
+[2021-03-24 00:00:00] Handle me bb 2018-05-11 11:28:31.8824 2018-09-13 07:53:44.3701
+[2021-03-24 00:00:00] Handle me bb 2019-12-06 14:32:46.0423 2020-04-09 10:57:58.53
+[2021-03-24 00:00:00] Handle me bb 2020-06-05 09:01:54.4637 2020-10-08 05:27:06.9514
+[2021-03-24 00:00:00] Handle me bb 2020-07-01 23:26:39.5985 2020-11-03 19:51:52.0862
+[2021-03-24 00:00:00] Handle me bb 2020-08-19 17:52:02.3457 2020-12-22 14:17:14.8334
+[2021-03-24 00:00:00] Handle me bb 2020-08-19 17:52:02.3457 2020-12-22 14:17:14.8334
+[2021-03-24 00:00:00] Handle me bb 2018-07-19 04:42:28.4807 2018-11-21 01:07:40.9684
+[2021-03-24 00:00:00] Handle me bb 2019-12-17 16:33:04.8485 2020-04-20 12:58:17.3362
+[2021-03-24 00:00:00] Handle me bb 2018-06-24 19:29:47.1071 2018-10-27 15:54:59.5948
+[2021-03-24 00:00:00] Handle me bb 2018-06-22 14:17:43.3458 2018-10-25 10:42:55.8335
+[2021-03-24 00:00:00] Handle me bb 2018-05-13 16:40:35.6436 2018-09-15 13:05:48.1313
+[2021-03-24 00:00:00] Handle me bb 2018-05-04 19:52:20.5987 2018-09-06 16:17:33.0864
+[2021-03-24 00:00:00] Handle me bb 2018-05-04 19:52:20.5987 2018-09-06 16:17:33.0864
+[2021-03-24 00:00:00] Handle me bb 2018-05-07 01:04:24.3599 2018-09-08 21:29:36.8476
+[2021-03-24 00:00:00] Handle me bb 2019-11-14 10:32:08.43 2020-03-18 06:57:20.9177
+[2021-03-24 00:00:00] Handle me bb 2019-11-14 10:32:08.43 2020-03-18 06:57:20.9177
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-05-22 13:41:12.8436 2020-04-25 17:26:48.3127
+[2021-03-24 00:00:00] Handle me bb 2019-05-22 13:41:12.8436 2020-04-25 17:26:48.3127
+[2021-03-24 00:00:00] Handle me bb 2019-10-01 13:49:38.5867 2020-01-13 12:16:11.7144
+[2021-03-24 00:00:00] Handle me bb 2019-10-01 13:49:38.5867 2020-01-13 12:16:11.7144
+[2021-03-24 00:00:00] Handle me bb 2019-11-11 20:49:32.2268 2019-12-09 17:41:53.9324
+[2021-03-24 00:00:00] Handle me bb 2019-11-11 20:49:32.2268 2019-12-09 17:41:53.9324
+[2021-03-24 00:00:00] Handle me bb 2019-11-19 00:09:34.7162 2019-11-30 00:28:20.0676
+[2021-03-24 00:00:00] Handle me bb 2019-11-19 00:09:34.7162 2019-11-30 00:28:20.0676
+[2021-03-24 00:00:00] Handle me bb 2019-11-22 00:07:38.3669 2019-11-28 02:08:19.3876
+[2021-03-24 00:00:00] Handle me bb 2019-11-22 00:07:38.3669 2019-11-28 02:08:19.3876
+[2021-03-24 00:00:00] Handle me bb 2019-11-24 14:49:47.273 2019-11-30 16:50:28.2937
+[2021-03-24 00:00:00] Handle me bb 2019-11-26 09:49:27.4575 2019-11-29 16:43:03.1703
+[2021-03-24 00:00:00] Handle me bb 2019-11-26 09:49:27.4575 2019-11-29 16:43:03.1703
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 09:03:18.6862 2019-11-29 03:50:31.4014
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 09:03:18.6862 2019-11-29 03:50:31.4014
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 15:21:25.0013 2019-11-28 20:20:29.7439
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 15:46:08.5676 2019-11-28 15:40:10.9057
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 15:46:08.5676 2019-11-28 00:55:37.371
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 15:46:08.5676 2019-11-28 00:55:37.371
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 16:38:16.0902 2019-11-27 19:20:00.617
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 16:38:16.0902 2019-11-27 19:20:00.617
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 17:06:58.8803 2019-11-27 19:10:14.6689
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 18:03:39.3341 2019-11-27 19:03:47.7632
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 18:03:39.3341 2019-11-27 19:03:47.7632
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 18:17:29.0698 2019-11-27 19:01:22.641
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 17:55:32.2842 2019-11-27 19:23:19.4266
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 17:55:32.2842 2019-11-27 19:23:19.4266
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 17:11:38.713 2019-11-27 20:07:12.9978
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 17:11:38.713 2019-11-27 20:07:12.9978
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 15:43:51.5706 2019-11-27 21:35:00.1402
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 15:43:51.5706 2019-11-27 21:35:00.1402
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 12:48:17.2858 2019-11-28 00:30:34.425
+[2021-03-24 00:00:00] Handle me bb 2019-11-27 12:48:17.2858 2019-11-28 00:30:34.425
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-05-07 01:16:46.515 2019-11-02 14:33:51.1751
+[2021-03-24 00:00:00] Handle me bb 2019-05-07 01:16:46.515 2019-11-02 14:33:51.1751
+[2021-03-24 00:00:00] Handle me bb 2019-05-17 04:32:44.3587 2019-11-12 17:49:49.0188
+[2021-03-24 00:00:00] Handle me bb 2019-06-19 20:59:20.8145 2019-08-22 22:46:41.4694
+[2021-03-24 00:00:00] Handle me bb 2019-06-19 20:59:20.8145 2019-08-22 22:46:41.4694
+[2021-03-24 00:00:00] Handle me bb 2019-07-04 11:29:37.3181 2019-07-21 12:44:38.4601
+[2021-03-24 00:00:00] Handle me bb 2019-07-04 11:29:37.3181 2019-07-21 12:44:38.4601
+[2021-03-24 00:00:00] Handle me bb 2019-07-06 10:34:02.8716 2019-07-12 15:54:38.9738
+[2021-03-24 00:00:00] Handle me bb 2019-07-06 10:34:02.8716 2019-07-12 15:54:38.9738
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:16:29.4951 2019-07-09 13:33:21.3329
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:16:29.4951 2019-07-09 13:33:21.3329
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 18:46:51.8779 2019-07-09 01:14:59.1856
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 15:32:48.224 2019-07-09 04:29:02.8395
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 19:21:22.579 2019-07-09 01:21:19.679
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 19:21:22.579 2019-07-09 01:21:19.679
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 21:37:07.3023 2019-07-09 00:04:26.438
+[2021-03-24 00:00:00] Handle me bb 2019-07-08 21:37:07.3023 2019-07-09 00:04:26.438
+[2021-03-24 00:00:00] Handle me bb 2018-03-07 07:54:27.2136 2021-03-10 19:37:32.7864
+[2021-03-24 00:00:00] Handle me bb 2019-05-31 10:29:27.8886 2019-07-14 18:30:43.1133
+[2021-03-24 00:00:00] Handle me bb 2019-05-31 10:29:27.8886 2019-07-14 18:30:43.1133
+[2021-03-24 00:00:00] Handle me bb 2019-06-20 08:58:59.4975 2019-06-26 02:16:34.3652
+[2021-03-24 00:00:00] Handle me bb 2019-06-20 08:58:59.4975 2019-06-26 02:16:34.3652
+[2021-03-24 00:00:00] Handle me bb 2019-06-22 16:04:51.2438 2019-06-23 07:01:41.2495
+[2021-03-24 00:00:00] Handle me bb 2019-06-22 16:04:51.2438 2019-06-23 07:01:41.2495
+[2021-03-24 00:00:00] Handle me bb 2019-06-22 21:52:06.5749 2019-06-22 23:15:17.019
+[2021-03-24 00:00:00] Handle me bb 2019-06-22 21:52:06.5749 2019-06-22 23:15:17.019
+[2021-03-24 00:00:00] Handle me bb 2019-06-22 22:26:39.7432 2019-06-22 22:31:11.4004
+[2021-03-24 00:00:00] Handle me bb 2019-06-22 22:26:39.7432 2019-06-22 22:31:11.4004

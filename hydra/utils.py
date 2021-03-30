@@ -1,11 +1,14 @@
-from datetime import date
+from datetime import datetime
+from functools import wraps
+from time import time
 
 
-flatten = lambda t: [item for sublist in t for item in sublist]
+def flatten(t):
+    return [item for sublist in t for item in sublist]
 
 
 def now():
-    return date.today().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def printd(*arg):
@@ -40,3 +43,16 @@ def get_methods(object, spacing=20):
             )
         except:
             print(method.ljust(spacing) + " " + " getattr() failed")
+
+
+def timeme(f):
+    @wraps(f)
+    def wrap(*args, **kw):
+        ts = time()
+        result = f(*args, **kw)
+        te = time()
+        # print("func:%r args:[%r, %r] took: %2.4f sec" % (f.__name__, args, kw, te - ts))
+        print("func:%r took: %2.4f sec" % (f.__name__, te - ts))
+        return result
+
+    return wrap

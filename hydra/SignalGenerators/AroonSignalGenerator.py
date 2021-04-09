@@ -1,4 +1,4 @@
-import duckdb
+import sqlite3
 import pathlib
 import numpy as np
 from numba import njit
@@ -15,7 +15,6 @@ from datetime import datetime
 import os, psutil
 import scipy as sp
 
-process = psutil.Process(os.getpid())
 
 name = "Aroon"
 
@@ -91,26 +90,32 @@ def save_parquet(dataframe, filepath=None, writer=None):
     return writer
 
 
-current_time = datetime.now().strftime("%Y%m%dT%H%M%S")
+current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
 
 
-def save_duck(df, table, filepath, *args, **kwargs):
-    cursor = duckdb.connect(database=f"{filepath}.{current_time}.duck")
+def save_db(df, table, filepath, *args, **kwargs):
+    printd(f"Connecting to Database!")
+    conn = sqlite3.connect(database=f"{filepath} {current_time}.db")
+    printd(f"Converting dataframe to table")
+    df.to_sql(f"{table}_df", conn, if_exists="replace", index=False)
     try:
-        cursor.register(f"{table}_view", df)
-        cursor.execute(f"INSERT INTO {table} SELECT * FROM {table}_view")
-
-        # cursor.execute("""DESCRIBE aroon_the_world;""")
-        # print("DESCRIBE join", cursor.fetchall())
-    except RuntimeError as e:
-        if "Catalog Error: Table with name" not in str(e):
+        db_stmnt = f"INSERT INTO {table} SELECT * FROM {table}_df;"
+        printd(f"{db_stmnt=}")
+        conn.execute(db_stmnt)
+    except sqlite3.OperationalError as e:
+        if "no such table:" not in str(e):
             print(e)
             raise e
-        # df.insert(0, "timestamp", df.index)
-        cursor.register(f"{table}_view", df)
-        cursor.execute(f"CREATE TABLE {table} AS SELECT * FROM {table}_view; ")
-        cursor.execute(f"CREATE INDEX {table}_timestamp ON {table} (timestamp);")
-    cursor.close()
+        db_stmnt = f"""
+            CREATE TABLE {table} AS SELECT * FROM {table}_df;
+            CREATE INDEX {table}_timestamp ON {table} (timestamp);
+        """
+        printd(f"{db_stmnt=}")
+        conn.executescript(db_stmnt)
+
+    conn.commit()
+    printd("Closing db connection")
+    conn.close()
 
 
 @timeme
@@ -124,6 +129,7 @@ def main(
     save_method=None,
     skip_save=False,
 ):
+    printd("Loading Prices")
     prices = load_prices(pair, path, startDate, endDate, interval)
     output_dir = (
         pathlib.Path(__file__)
@@ -131,10 +137,14 @@ def main(
         .joinpath("..", "..", "output", "signals")
     )
     output_dir.mkdir(parents=True, exist_ok=True)
+    printd("Starting Batches")
     for batch in batches:
+        printd(f"{batch=}")
         ts = time()
         filename = f"{pair} {name}"
+        printd(f"Generating Signals")
         signals = generate_signals(prices, **batch)
+        printd(f"Generating Sparse Entry Matrix")
         entries = sp.sparse.coo_matrix(signals.entries.values)
         sparse_entries = pd.DataFrame(
             {
@@ -142,7 +152,7 @@ def main(
                 "timeperiod": signals.entries.columns[entries.col],
             }
         )
-
+        printd(f"Generating Sparse Exit Matrix")
         exits = sp.sparse.coo_matrix(signals.exits.values)
         sparse_exits = pd.DataFrame(
             {
@@ -151,6 +161,7 @@ def main(
             }
         )
         if not skip_save and save_method is not None:
+            printd(f"Saving...")
             save_method(
                 sparse_entries,
                 "aroon_entries",
@@ -162,38 +173,31 @@ def main(
                 output_dir.joinpath(filename),
             )
         te = time()
-        timeperiods = batch["timeperiods"]
-        printd(
-            f"{te - ts}, {timeperiods[0]}-{timeperiods[-1]}, {process.memory_info().rss / 1024}"
-        )
+        printd("Collect Garbage")
+        gcts = time()
+        gc.collect()
+        gcte = time()
 
+        printd(f"Time taken: {te - ts}, GC: {gcte-gcts}")
 
-# main(
-#     pair="XBTUSD",
-#     path="../data/kraken",
-#     startDate="2017-05-15",
-#     endDate="2021-05-16",
-#     interval=1,
-#     skip_save=True,
-#     batches=[
-#         {
-#             "timeperiods": list(range(100, 102)),
-#         },
-#         {
-#             "timeperiods": list(range(102, 104)),
-#         },
-#     ],
-# )
 
 bitches = []
+start = 2
+batch_size = 20
 for i in range(0, 10000):
-    bitches.append({"timeperiods": list(range(2 + (20 * i), 100 + (20 * (i + 1))))})
+    bitches.append(
+        {
+            "timeperiods": list(
+                range(start + (batch_size * i), start + (batch_size * (i + 1)))
+            )
+        }
+    )
 
 
 pair = "XBTUSD"
 path = "../data/kraken"
-startDate = "2018-05-15"
-endDate = "2021-05-16"
+startDate = "2017-05-15"
+endDate = "2017-06-16"
 interval = 1
 
 
@@ -205,12 +209,12 @@ def null():
         endDate=endDate,
         interval=interval,
         skip_save=True,
-        save_method=save_duck_join,
         batches=bitches,
     )
 
 
 def save():
+    printd("Running SAVE")
     main(
         pair=pair,
         path=path,
@@ -218,7 +222,7 @@ def save():
         endDate=endDate,
         interval=interval,
         skip_save=False,
-        save_method=save_duck,
+        save_method=save_db,
         batches=bitches,
     )
 
@@ -231,6 +235,6 @@ def save():
 #         endDate=endDate,
 #         interval=interval,
 #         skip_save=False,
-#         save_method=save_duck_update,
+#         save_method=save_db_update,
 #         batches=bitches,
 #     )

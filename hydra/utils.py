@@ -1,6 +1,10 @@
 from datetime import datetime
 from functools import wraps
 from time import time
+import psutil
+import os
+
+process = psutil.Process(os.getpid())
 
 
 def flatten(t):
@@ -12,7 +16,7 @@ def now():
 
 
 def printd(*arg):
-    print(f"[{now()}]", *arg)
+    print(f"[{now()}] ({process.memory_info().rss / 1024 / 1024:.2f})", *arg)
 
 
 def write(message, filename="log.txt"):

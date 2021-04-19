@@ -1,3 +1,4 @@
+import math
 import sqlite3
 import pathlib
 import numpy as np
@@ -20,9 +21,9 @@ name = "Aroon"
 
 
 @njit
-def aroon_entry(from_i, to_i, col, a, temp_idx_arr):
+def aroon_entry(from_i, to_i, col, a, entry, temp_idx_arr):
     if from_i == 0:
-        w = np.where(a[:, col] > 50)[0]
+        w = np.where(a[:, col] > entry)[0]
         for i, num in enumerate(w):
             temp_idx_arr[i] = num
 
@@ -33,10 +34,10 @@ def aroon_entry(from_i, to_i, col, a, temp_idx_arr):
 
 
 @njit
-def aroon_exit(from_i, to_i, col, a, temp_idx_arr):
+def aroon_exit(from_i, to_i, col, a, exit, temp_idx_arr):
     if temp_idx_arr[-1] != 42:
         temp_idx_arr[-1] = 42
-        w = np.where(a[:, col] < -50)[0]
+        w = np.where(a[:, col] < exit)[0]
         for i, num in enumerate(w):
             temp_idx_arr[i] = num
 
@@ -46,15 +47,19 @@ def aroon_exit(from_i, to_i, col, a, temp_idx_arr):
     return temp_idx_arr[:0]
 
 
-AroonStrategy = SignalFactory(input_names=["aroon"]).from_choice_func(
+AroonStrategy = SignalFactory(
+    input_names=["aroon"], param_names=["entry_threshold", "exit_threshold"]
+).from_choice_func(
     entry_choice_func=aroon_entry,
     entry_settings=dict(
         pass_inputs=["aroon"],
+        pass_params=["entry_threshold"],
         pass_kwargs=["temp_idx_arr"],  # built-in kwarg
     ),
     exit_choice_func=aroon_exit,
     exit_settings=dict(
         pass_inputs=["aroon"],
+        pass_params=["exit_threshold"],
         pass_kwargs=["temp_idx_arr"],  # built-in kwarg
     ),
     # forward_flex_2d=True,
@@ -64,10 +69,13 @@ AROONOSC = vbt.IndicatorFactory.from_talib("AROONOSC")
 # printd(help(AROONOSC.run))
 
 
-def generate_signals(prices, timeperiods):
-    aroonosc = AROONOSC.run(prices["high"], prices["low"], timeperiods)
+def generate_signals(
+    prices, timeperiods, interval=1, entry_threshold=50, exit_threshold=-50
+):
+    price = prices[interval]
+    aroonosc = AROONOSC.run(price["high"], price["low"], timeperiods)
     # Run strategy signal generator
-    aroon_signals = AroonStrategy.run(aroonosc.real)
+    aroon_signals = AroonStrategy.run(aroonosc.real, entry_threshold, exit_threshold)
     return aroon_signals
 
 
@@ -113,9 +121,21 @@ def save_db(df, table, filepath, *args, **kwargs):
         printd(f"{db_stmnt=}")
         conn.executescript(db_stmnt)
 
+    printd("Committing db changes")
     conn.commit()
     printd("Closing db connection")
     conn.close()
+
+
+def load_multiple_prices(*args):
+    prices = {}
+    prices[1] = load_prices(*args, interval=1)
+    prices[5] = load_prices(*args, interval=5)
+    prices[15] = load_prices(*args, interval=15)
+    prices[60] = load_prices(*args, interval=60)
+    prices[720] = load_prices(*args, interval=720)
+    prices[1440] = load_prices(*args, interval=1440)
+    return prices
 
 
 @timeme
@@ -124,13 +144,12 @@ def main(
     path,
     startDate,
     endDate,
-    interval,
     batches,
     save_method=None,
-    skip_save=False,
 ):
     printd("Loading Prices")
-    prices = load_prices(pair, path, startDate, endDate, interval)
+    prices = load_multiple_prices(pair, path, startDate, endDate)
+
     output_dir = (
         pathlib.Path(__file__)
         .parent.absolute()
@@ -141,27 +160,39 @@ def main(
     for batch in batches:
         printd(f"{batch=}")
         ts = time()
-        filename = f"{pair} {name}"
-        printd(f"Generating Signals")
+        printd("Generating Signals")
         signals = generate_signals(prices, **batch)
-        printd(f"Generating Sparse Entry Matrix")
+        printd("Generating Sparse Entry Matrix")
         entries = sp.sparse.coo_matrix(signals.entries.values)
         sparse_entries = pd.DataFrame(
             {
                 "timestamp": signals.entries.index[entries.row],
-                "timeperiod": signals.entries.columns[entries.col],
+                "interval": batch["interval"],
+                "timeperiod": signals.entries.columns[entries.col].get_level_values(
+                    "aroonosc_timeperiod"
+                ),
+                "threshold": signals.entries.columns[entries.col].get_level_values(
+                    "custom_entry_threshold"
+                ),
             }
         )
-        printd(f"Generating Sparse Exit Matrix")
+        printd("Generating Sparse Exit Matrix")
         exits = sp.sparse.coo_matrix(signals.exits.values)
         sparse_exits = pd.DataFrame(
             {
                 "timestamp": signals.exits.index[exits.row],
-                "timeperiod": signals.exits.columns[exits.col],
+                "interval": batch["interval"],
+                "timeperiod": signals.exits.columns[exits.col].get_level_values(
+                    "aroonosc_timeperiod"
+                ),
+                "threshold": signals.entries.columns[exits.col].get_level_values(
+                    "custom_exit_threshold"
+                ),
             }
         )
-        if not skip_save and save_method is not None:
+        if save_method is not None:
             printd(f"Saving...")
+            filename = f"{pair} {name}"
             save_method(
                 sparse_entries,
                 "aroon_entries",
@@ -182,14 +213,46 @@ def main(
 
 
 bitches = []
-start = 2
-batch_size = 20
-for i in range(0, 10000):
+batch_size = 3
+
+intervals = [1, 5, 15, 60, 720, 1440]
+
+for (i, interval) in enumerate(intervals):
+    if interval == 1:
+        start = 2
+    else:
+        start = math.floor((intervals[i - 1] * 60) / interval)
+    end = 60
+
+    for batch_start in range(start, end, batch_size):
+        bitches.append(
+            {
+                "interval": interval,
+                "timeperiods": list(range(batch_start, batch_start + batch_size)),
+                "entry_threshold": list(range(0, 101, 5)),
+                "exit_threshold": list(range(0, -101, -5)),
+            }
+        )
+
+
+def chunks(array, n):
+    """Yield successive n-sized chunks from array."""
+    for i in range(0, len(array), n):
+        yield array[i : i + n]
+
+
+funky_periods = (
+    list(range(60, math.ceil(365 / 2), 5))
+    + list(range(math.ceil(365 / 2), 365, 15))
+    + list(range(365, 365 * 3, 30))
+)
+for chunk in chunks(funky_periods, batch_size):
     bitches.append(
         {
-            "timeperiods": list(
-                range(start + (batch_size * i), start + (batch_size * (i + 1)))
-            )
+            "interval": 1440,
+            "timeperiods": chunk,
+            "entry_threshold": list(range(0, 101, 5)),
+            "exit_threshold": list(range(0, -101, -5)),
         }
     )
 
@@ -197,34 +260,17 @@ for i in range(0, 10000):
 pair = "XBTUSD"
 path = "../data/kraken"
 startDate = "2017-05-15"
-endDate = "2017-06-16"
-interval = 1
+endDate = "2021-06-16"
 
 
-def null():
-    main(
-        pair=pair,
-        path=path,
-        startDate=startDate,
-        endDate=endDate,
-        interval=interval,
-        skip_save=True,
-        batches=bitches,
-    )
-
-
-def save():
-    printd("Running SAVE")
-    main(
-        pair=pair,
-        path=path,
-        startDate=startDate,
-        endDate=endDate,
-        interval=interval,
-        skip_save=False,
-        save_method=save_db,
-        batches=bitches,
-    )
+main(
+    pair=pair,
+    path=path,
+    startDate=startDate,
+    endDate=endDate,
+    save_method=save_db,
+    batches=bitches,
+)
 
 
 # def update():

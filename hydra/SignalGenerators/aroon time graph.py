@@ -22,12 +22,14 @@ def main(
 ):
     prices = load_prices(pair, path, startDate, endDate, interval)
     print("time,", "aroon_size")
-    for i in range(0, 100):
+    for batch_size in range(1, 25):
         b4 = process.memory_info().rss / 1024 / 1024
-        timeperiods = list(range(100, 101 + i))
+        timeperiods = list(range(100, 100 + batch_size))
         size = len(timeperiods)
         ts = time()
-        signals = generate_signals(prices, timeperiods)
+        signals = generate_signals(
+            prices, timeperiods, list(range(0, 101, 5)), list(range(0, -101, -5))
+        )
         gc.collect()
         te = time()
         print(

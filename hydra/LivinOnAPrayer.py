@@ -60,7 +60,7 @@ class Simulation:
         if len(self.history):
             buy_time, profit = self.history[0]
             if buy_time == time:
-                self.history.pop()
+                self.history.pop(0)
 
 
 class Context:
@@ -170,6 +170,9 @@ def send_to_puppy_farm(ctx: Context):
         else:
             sim.trim_history(death_time)
 
+    while len(ctx.entries) and ctx.entries[0][0] == death_time:
+        ctx.entries.pop(0)
+
     return ctx
 
 
@@ -255,14 +258,14 @@ def loop(db, window=60, fee=0, **kwargs):
 pair = "XBTUSD"
 path = "../data/kraken"
 start_date = "2019-05-15"
-end_date = "2019-05-15 12:00"
+end_date = "2019-05-15 01:00"
 # end_date = "2021-06-16"
 
 conn = sqlite3.connect(database="output/signals/XBTUSD Aroon 2021-04-16T2204.db")
 cur = conn.cursor()
 loop(
     cur,
-    window=120,
+    window=30,
     pair=pair,
     path=path,
     startDate=start_date,

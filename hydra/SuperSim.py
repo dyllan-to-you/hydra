@@ -60,7 +60,7 @@ def order_func(oc, open):
     return order
 
 
-def load_prices(pair, path, startDate, endDate, interval):
+def load_prices(pair, path, startDate, endDate, interval) -> pd.DataFrame:
     filepath = pathlib.Path(__file__).parent.absolute()
     parqpath = filepath.joinpath(path, f"{pair}_{interval}.filled.parq")
     table = pq.read_table(parqpath)

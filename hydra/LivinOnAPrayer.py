@@ -184,7 +184,9 @@ def get_total_profit(sim: Simulation):
     return total
 
 
-def get_best_simulations(ctx: Context, margin: number = 0.99, min_profit=1):
+def get_best_simulations(
+    ctx: Context, margin: number = 0.99, min_profit=1, min_trade_history=3
+):
     profits = [
         (key, get_total_profit(sim)) for key, sim in list(ctx.simulations.items())
     ]
@@ -198,7 +200,7 @@ def get_best_simulations(ctx: Context, margin: number = 0.99, min_profit=1):
     def qualifier(sim):
         key, profit = sim
         minimum = (best_profit - min_profit) * margin
-        return profit > minimum + min_profit
+        return profit > minimum + min_profit and len(sim.history) > min_trade_history
 
     best = filter(qualifier, sorted_profits)
 

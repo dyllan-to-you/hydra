@@ -1,6 +1,6 @@
 from enum import Enum
 import gc
-from typing import Dict, List, NamedTuple
+from typing import Dict, List, NamedTuple, OrderedDict
 import weakref
 from numpy import number
 import pandas
@@ -11,7 +11,11 @@ from tqdm import tqdm
 
 
 def str_to_datetime(str) -> datetime:
-    return datetime.strptime(str, "%Y-%m-%d %H:%M:%S")
+    return (
+        datetime.strptime(str, "%Y-%m-%d %H:%M:%S")
+        if not isinstance(str, datetime)
+        else str
+    )
 
 
 def get_aroon_id(aroon):
@@ -63,32 +67,8 @@ class Simulation:
                 self.history.pop(0)
 
 
-class Context:
-    current_time: datetime
-    prices: pandas.DataFrame
-    db: sqlite3.Connection
-    entries: List
-    simulations: Dict[str, Simulation]
-    sims_by_entry: Dict[str, Simulation]
-    delta: timedelta
-    fee: number
-    orders: List[Order]
-    ideal_exit: str
-
-    def __init__(self, prices, db, delta, fee):
-        self.prices = prices
-        self.db = db
-        self.entries = list()
-        self.simulations = dict()
-        self.sims_by_entry = dict()
-        self.delta = timedelta(minutes=delta)
-        self.fee = fee
-        self.orders = []
-        self.ideal_exit = None
-
-
 class Aroon(NamedTuple):
-    timestamp: str
+    timestamp: datetime
     interval: int
     timeperiod: int
     threshold: int
@@ -101,6 +81,32 @@ class Price(NamedTuple):
     low: number
     close: number
     volume: number
+
+
+class Context:
+    current_time: datetime
+    prices: pandas.DataFrame
+    db: sqlite3.Connection
+    entries: List
+    simulations: Dict[str, Simulation]
+    sims_by_entry: Dict[str, Simulation]
+    delta: timedelta
+    fee: number
+    orders: List[Order]
+    ideal_exit: str
+    window_prices: OrderedDict[datetime, Price]
+
+    def __init__(self, prices, db, delta, fee):
+        self.prices = prices
+        self.db = db
+        self.entries = list()
+        self.simulations = dict()
+        self.sims_by_entry = dict()
+        self.delta = timedelta(minutes=delta)
+        self.fee = fee
+        self.orders = []
+        self.ideal_exit = None
+        self.window_prices = OrderedDict()
 
 
 def do_exits(ctx: Context, price: Price):
@@ -122,7 +128,8 @@ def do_exits(ctx: Context, price: Price):
             sim_id = get_simulation_id(entry, exit)
             sim = ctx.simulations.get(sim_id, None)
             if sim is None:
-                open_price = ctx.prices.loc[entry_time, "open"]
+                open_record = ctx.window_prices.get(entry_time, None)
+                open_price = open_record[1]
                 sell_price = current_price
                 profit = sell_price / open_price
                 sim = Simulation(None, Trade(str_to_datetime(entry_time), profit))
@@ -134,7 +141,7 @@ def do_exits(ctx: Context, price: Price):
                 bought.append(weakref.proxy(sim))
                 ctx.sims_by_entry[entry_id] = bought
             elif sim.has_open_position():
-                buy_price = ctx.prices.loc[sim.buy_time, "open"]
+                buy_price = ctx.window_prices[sim.buy_time][1]
                 sell_price = current_price
                 profit = (sell_price * (1 - ctx.fee)) / (buy_price * (1 + ctx.fee))
                 sim.close_position(profit)
@@ -153,7 +160,9 @@ def do_entries(ctx: Context):
     entries = ctx.db.fetchall()
     keyed_entries = {}
     for entry in entries:
-        ctx.entries.append(Aroon(*entry))
+        ctx.entries.append(
+            Aroon(str_to_datetime(entry[0]), entry[1], entry[2], entry[3])
+        )
         entry_id = get_aroon_id(entry)
         keyed_entries[entry_id] = entry
         for sim in ctx.sims_by_entry.get(entry_id, []):
@@ -170,7 +179,7 @@ def send_to_puppy_farm(ctx: Context):
         else:
             sim.trim_history(death_time)
 
-    while len(ctx.entries) and ctx.entries[0][0] == death_time:
+    while len(ctx.entries) > 0 and ctx.entries[0][0] <= death_time:
         ctx.entries.pop(0)
 
     return ctx
@@ -200,7 +209,10 @@ def get_best_simulations(
     def qualifier(sim):
         key, profit = sim
         minimum = (best_profit - min_profit) * margin
-        return profit > minimum + min_profit and len(sim.history) > min_trade_history
+        return (
+            profit > minimum + min_profit
+            and len(ctx.simulations[key].history) > min_trade_history
+        )
 
     best = filter(qualifier, sorted_profits)
 
@@ -224,13 +236,14 @@ def tick(ctx: Context, price: Price, skip_order=False):
             [entry_id, exit_id] = key.split(":")
             entry = entries.get(entry_id, None)
             if entry is not None:
+                ctx.ideal_exit = exit_id
                 break
-        ctx.ideal_exit = exit_id
         ctx.orders.append(Order(ctx.current_time, Direction.BUY))
     else:
         exit = exits.get(ctx.ideal_exit, None)
-        if exit is not None:
-            buy_price = ctx.prices.loc[ctx.orders[-1][0], "open"]
+        if exit is not None and len(ctx.orders) != 0:
+            last_order_time = ctx.orders[-1][0]
+            buy_price = ctx.window_prices[last_order_time][1]
             sell_price = price[1]
             ctx.orders.append(Order(ctx.current_time, Direction.SELL))
             return (sell_price * (1 - ctx.fee)) / (buy_price * (1 + ctx.fee))
@@ -249,6 +262,9 @@ def loop(db, window=60, fee=0, **kwargs):
     )
     total_profit = 1
     for price in tqdm(prices.itertuples(index=True), total=len(prices.index)):
+        if window_size == window:
+            ctx.window_prices.popitem(last=False)
+        ctx.window_prices[pandas.to_datetime(price[0])] = price
         total_profit *= tick(ctx, price, skip_order=window_size != window)
         gc.collect()
         window_size = window_size + 1 if window_size < window else window
@@ -260,7 +276,7 @@ def loop(db, window=60, fee=0, **kwargs):
 pair = "XBTUSD"
 path = "../data/kraken"
 start_date = "2019-05-15"
-end_date = "2019-05-15 01:00"
+end_date = "2019-05-15 12:00"
 # end_date = "2021-06-16"
 
 conn = sqlite3.connect(database="output/signals/XBTUSD Aroon 2021-04-16T2204.db")

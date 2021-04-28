@@ -7,6 +7,11 @@ import os
 process = psutil.Process(os.getpid())
 
 
+def sanitize_filename(filename):
+    keepcharacters = (" ", ".", "_")
+    return "".join(c for c in filename if c.isalnum() or c in keepcharacters).rstrip()
+
+
 def flatten(t):
     return [item for sublist in t for item in sublist]
 

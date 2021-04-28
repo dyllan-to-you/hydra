@@ -1,3 +1,5 @@
+import json
+from hydra.utils import sanitize_filename
 from operator import itemgetter
 from collections import deque
 from enum import Enum
@@ -5,6 +7,7 @@ import gc
 from typing import Deque, Dict, List, NamedTuple, OrderedDict
 import weakref
 import pandas
+import copy
 from six import Iterator
 from hydra.SuperSim import load_prices
 import sqlite3
@@ -40,14 +43,23 @@ class Simulation:
         self.id = id
         self.history = deque()
         self.history.append(trade)
+
+        self.total_profit = 1 * trade[1]
         self.buy_time = None
-        self.total_profit = 1
+
+    def __del__(self):
+        del self.history
 
     def __hash__(self):
         return self.id
 
     def __eq__(self, other):
         return self.id == other.id
+
+    def serialize(self):
+        res = copy.deepcopy(self.__dict__)
+        res["history"] = list(res["history"])
+        return res
 
     def has_open_position(self):
         return self.buy_time is not None
@@ -213,7 +225,6 @@ def send_to_puppy_farm(ctx: Context):
     death_time = ctx.current_time - ctx.delta
     delete_me = []
     for key, sim in ctx.simulations.items():
-        # print(key, sim.buy_time)
         if sim.buy_time == death_time:  # clear sims with old open orders
             delete_me.append(key)
         else:
@@ -221,6 +232,7 @@ def send_to_puppy_farm(ctx: Context):
             if len(sim.history) == 0:
                 delete_me.append(key)
 
+    print("\nMurdered", len(delete_me), "simulations")
     for key in delete_me:
         del ctx.simulations[key]
 
@@ -260,15 +272,18 @@ def tick(ctx: Context, price: Price, skip_order=False, use_cached_simulation=Tru
     ctx = send_to_puppy_farm(ctx)
     exits = do_exits(ctx, price)
     entries = do_entries(ctx)
-
+    print(
+        f"{ctx.current_time} {len(entries)=} {len(exits)=} cost {len(ctx.entries) * len(exits)}"
+    )
     if skip_order:
         return 1
 
     if len(ctx.orders) == 0 or ctx.orders[-1][1] == Direction.SELL:
         if not use_cached_simulation:
             ctx.best_simulations = get_best_simulations(ctx)
-
+        best_count = 0
         for key, profit in ctx.best_simulations:
+            best_count += 1
             entry_id, exit_id = ctx.get_indicator_id(key)
             entry = entries.get(entry_id, None)
             if entry is not None:
@@ -281,6 +296,7 @@ def tick(ctx: Context, price: Price, skip_order=False, use_cached_simulation=Tru
                 )
                 ctx.buy_price = price[1]
                 break
+        print("Best", best_count)
     else:
         exit = exits.get(ctx.ideal_exit, None)
         if exit is not None and len(ctx.orders) != 0:
@@ -291,7 +307,7 @@ def tick(ctx: Context, price: Price, skip_order=False, use_cached_simulation=Tru
     return 1
 
 
-def loop(db, window=60, fee=0, **kwargs):
+def loop(db, window=60, fee=0, snapshot=False, **kwargs):
     prices = load_prices(interval=1, **kwargs)
     tick_count = 0
     # buys: list((aroonKey, timestamp))
@@ -316,10 +332,11 @@ def loop(db, window=60, fee=0, **kwargs):
             skip_order=tick_count < window,
             use_cached_simulation=tick_count % round(window / 4) != 0,
         )
+
         gc.collect()
         tick_count += 1
 
-        print(len(ctx.entries), len(ctx.simulations))
+        print("Total", len(ctx.entries), len(ctx.simulations))
         # items = list(ctx.window_prices.items())
         # print(
         #     tick_count,
@@ -327,25 +344,55 @@ def loop(db, window=60, fee=0, **kwargs):
         #     items[0],
         # )
 
+    if snapshot:
+        with open(
+            f"{sanitize_filename(kwargs['startDate'])}.{len(ctx.simulations)} simulations.txt",
+            "w",
+        ) as outfile:
+            json.dump(
+                ctx.simulations,
+                outfile,
+                indent=2,
+                default=lambda o: o.serialize()
+                if hasattr(o, "serialize")
+                else str(o)
+                if isinstance(o, datetime)
+                else o.__dict__,
+            )
+
     print("Profit:", total_profit)
     print(ctx.orders)
 
 
 pair = "XBTUSD"
 path = "../data/kraken"
-start_date = "2019-05-24 00:00"
-end_date = "2019-05-27 00:00"
+start_date1 = "2019-05-24 00:00"
+start_date2 = "2019-05-24 01:00"
+end_date = "2019-05-24 02:00"
+# end_date = "2019-05-27 00:00"
 # end_date = "2019-05-28"
 
 conn = sqlite3.connect(database="output/signals/XBTUSD Aroon 2021-04-16T2204.db")
 cur = conn.cursor()
 loop(
     cur,
-    window=120,
+    window=30,
     pair=pair,
     path=path,
-    startDate=start_date,
+    startDate=start_date2,
     endDate=end_date,
     fee=0.002,
+    # snapshot=True,
+)
+print("===========================================================================")
+loop(
+    cur,
+    window=30,
+    pair=pair,
+    path=path,
+    startDate=start_date1,
+    endDate=end_date,
+    fee=0.002,
+    # snapshot=True,
 )
 conn.close()

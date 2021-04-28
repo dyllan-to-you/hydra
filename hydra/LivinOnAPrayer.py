@@ -7,7 +7,6 @@ import gc
 from typing import Deque, Dict, List, NamedTuple, OrderedDict
 import weakref
 import pandas
-import copy
 from six import Iterator
 from hydra.SuperSim import load_prices
 import sqlite3
@@ -29,6 +28,7 @@ class Order(NamedTuple):
 
 
 class Trade(NamedTuple):
+    sim_id: int
     buy_time: datetime
     profit: float
 
@@ -36,19 +36,15 @@ class Trade(NamedTuple):
 class Simulation:
     id: int
     buy_time: datetime  # timestamp | None
-    history: Deque[Trade]
+    history_count: int
     total_profit: float
 
-    def __init__(self, id, trade):
+    def __init__(self, id):
         self.id = id
-        self.history = deque()
-        self.history.append(trade)
 
-        self.total_profit = 1 * trade[1]
+        self.total_profit = 1
         self.buy_time = None
-
-    def __del__(self):
-        del self.history
+        self.history_count = 0
 
     def __hash__(self):
         return self.id
@@ -57,9 +53,7 @@ class Simulation:
         return self.id == other.id
 
     def serialize(self):
-        res = copy.deepcopy(self.__dict__)
-        res["history"] = list(res["history"])
-        return res
+        return self.__dict__
 
     def has_open_position(self):
         return self.buy_time is not None
@@ -67,19 +61,16 @@ class Simulation:
     def open_position(self, time: datetime):
         self.buy_time = time
 
-    def close_position(self, profit):
-        self.history.append(Trade(self.buy_time, profit))
+    def close_position(self, ctx, profit) -> Trade:
+        trade = Trade(self.id, self.buy_time, profit)
         self.total_profit *= profit
+        self.history_count += 1
         self.buy_time = None
+        return trade
 
-    def trim_history(self, time):
-        if len(self.history) > 0:
-            # gets buy time of oldest trade in history
-            if self.history[0][0] == time:
-                trade = self.history.popleft()
-                # divide by trade profit
-                self.total_profit /= trade[1]
-        return self
+    def kill_profit(self, profit):
+        self.total_profit /= profit
+        self.history_count -= 1
 
 
 class Aroon(NamedTuple):
@@ -108,7 +99,17 @@ class Price(NamedTuple):
     open: float
 
 
+class TimePeriod(NamedTuple):
+    price: Price
+    trades: List[Trade]
+
+
 def pandasPriceToOpenPrice(price: PandasPrice) -> Price:
+    """
+    Converts pandas price slice to `Price` Object.
+
+    Converts `pandas.Timestamp` to python `datetime`
+    """
     timestamp, open, high, low, close, volume = price
     return Price(timestamp.to_pydatetime(), open)
 
@@ -124,7 +125,7 @@ class Context:
     fee: float
     orders: List[Order]
     ideal_exit: str
-    window_prices: OrderedDict[datetime, Price]
+    window_periods: OrderedDict[datetime, TimePeriod]
     buy_price: float
     best_simulations: Iterator
 
@@ -140,7 +141,7 @@ class Context:
         self.fee = fee
         self.orders = []
         self.ideal_exit = None
-        self.window_prices = OrderedDict()
+        self.window_periods = OrderedDict()
         self.best_simulations = []
 
         db.execute(
@@ -178,10 +179,17 @@ def do_exits(ctx: Context, price: Price):
             sim_id = ctx.get_simulation_id(entry_id, exit_id)
             sim = ctx.simulations.get(sim_id, None)
             if sim is None:
-                buy_price = ctx.window_prices.get(entry_time, None)
+                buy_price, trades = ctx.window_periods.get(entry_time, (None, None))
+                if buy_price is None:
+                    raise Exception(
+                        f"ERROR could not find window_price for {entry_time=}"
+                    )
                 sell_price = current_price
                 profit = (sell_price * (1 - ctx.fee)) / (buy_price * (1 + ctx.fee))
-                sim = Simulation(sim_id, Trade(ctx.current_time, profit))
+                sim = Simulation(sim_id)
+                sim.open_position(ctx.current_time)
+                trade = sim.close_position(ctx, profit)
+                trades.append(trade)
                 ctx.simulations[sim_id] = sim
 
                 # provide lookup of simulations by buy indicator for use in entries
@@ -193,10 +201,15 @@ def do_exits(ctx: Context, price: Price):
                 else:
                     bought.add(sim)
             elif sim.has_open_position():
-                buy_price = ctx.window_prices[sim.buy_time]
+                buy_price, trades = ctx.window_periods.get(sim.buy_time, (None, None))
+                if buy_price is None:
+                    raise Exception(
+                        f"ERROR: Could not find window_price for {sim.buy_time=}"
+                    )
                 sell_price = current_price
                 profit = (sell_price * (1 - ctx.fee)) / (buy_price * (1 + ctx.fee))
-                sim.close_position(profit)
+                trade = sim.close_position(ctx, profit)
+                trades.append(trade)
 
     return keyed_exits
 
@@ -221,32 +234,14 @@ def do_entries(ctx: Context):
     return keyed_entries
 
 
-def send_to_puppy_farm(ctx: Context):
-    death_time = ctx.current_time - ctx.delta
-    delete_me = []
-    for key, sim in ctx.simulations.items():
-        if sim.buy_time == death_time:  # clear sims with old open orders
-            delete_me.append(key)
-        else:
-            sim.trim_history(death_time)
-            if len(sim.history) == 0:
-                delete_me.append(key)
-
-    print("\nMurdered", len(delete_me), "simulations")
-    for key in delete_me:
-        del ctx.simulations[key]
-
-    while len(ctx.entries) > 0 and ctx.entries[0][0] <= death_time:
-        ctx.entries.popleft()
-
-    return ctx
-
-
 def get_best_simulations(
     ctx: Context, margin: float = 0.99, min_profit=1, min_trade_history=3
 ):
     profits = [
-        (key, sim.total_profit) for key, sim in ctx.simulations.items()  # memleak?
+        (key, sim.total_profit)
+        for key, sim in ctx.simulations.items()
+        # decreases the effectiveness of caching sorted profits
+        if sim.history_count >= min_trade_history
     ]
     if not len(profits):
         return []
@@ -258,32 +253,26 @@ def get_best_simulations(
     def qualifier(sim):
         key, profit = sim
         minimum = (best_profit - min_profit) * margin
-        return (
-            profit > minimum + min_profit
-            and len(ctx.simulations[key].history) >= min_trade_history
-        )
+        return profit > minimum + min_profit
 
     best = filter(qualifier, sorted_profits)
-    return best
+    return list(best)
 
 
 def tick(ctx: Context, price: Price, skip_order=False, use_cached_simulation=True):
     ctx.current_time = price[0]
-    ctx = send_to_puppy_farm(ctx)
     exits = do_exits(ctx, price)
     entries = do_entries(ctx)
-    print(
-        f"{ctx.current_time} {len(entries)=} {len(exits)=} cost {len(ctx.entries) * len(exits)}"
-    )
+    cost = len(ctx.entries) * len(exits)
+    print(f"{ctx.current_time} {len(entries)=} {len(exits)=} {cost=}")
     if skip_order:
         return 1
 
     if len(ctx.orders) == 0 or ctx.orders[-1][1] == Direction.SELL:
         if not use_cached_simulation:
             ctx.best_simulations = get_best_simulations(ctx)
-        best_count = 0
+        print("Best(Waiting For Buy)", len(ctx.best_simulations))
         for key, profit in ctx.best_simulations:
-            best_count += 1
             entry_id, exit_id = ctx.get_indicator_id(key)
             entry = entries.get(entry_id, None)
             if entry is not None:
@@ -296,8 +285,8 @@ def tick(ctx: Context, price: Price, skip_order=False, use_cached_simulation=Tru
                 )
                 ctx.buy_price = price[1]
                 break
-        print("Best", best_count)
     else:
+        print("Best(Waiting For Sell)", len(ctx.best_simulations))
         exit = exits.get(ctx.ideal_exit, None)
         if exit is not None and len(ctx.orders) != 0:
             buy_price = ctx.buy_price
@@ -305,6 +294,25 @@ def tick(ctx: Context, price: Price, skip_order=False, use_cached_simulation=Tru
             ctx.orders.append(Order(ctx.current_time, Direction.SELL))
             return (sell_price * (1 - ctx.fee)) / (buy_price * (1 + ctx.fee))
     return 1
+
+
+def send_to_puppy_farm(ctx: Context, death_date: datetime, period: TimePeriod):
+    deleted = 0
+    print(f"[{death_date}] Trimming profits from {len(period[1])} simulations.")
+    for trade in period[1]:
+        # Update simulation profit
+        sim = ctx.simulations[trade[0]]
+        sim.kill_profit(trade[2])
+        if sim.history_count == 0:
+            del ctx.simulations[trade[0]]
+            deleted += 1
+
+    print("Murdered", deleted, "simulations")
+
+    while len(ctx.entries) > 0 and ctx.entries[0][0] <= death_date:
+        ctx.entries.popleft()
+
+    return ctx
 
 
 def loop(db, window=60, fee=0, snapshot=False, **kwargs):
@@ -321,11 +329,15 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
     )
 
     total_profit = 1
-    for price in tqdm(prices.itertuples(index=True), total=len(prices.index)):
+    for price in tqdm(
+        prices.itertuples(index=True), total=len(prices.index), smoothing=1, leave=True
+    ):
         price: Price = pandasPriceToOpenPrice(price)
         if tick_count >= window:
-            ctx.window_prices.popitem(last=False)
-        ctx.window_prices[price[0]] = price[1]
+            death_date, period = ctx.window_periods.popitem(last=False)
+            send_to_puppy_farm(ctx, death_date, period)
+        ctx.window_periods[price[0]] = (price[1], [])
+
         total_profit *= tick(
             ctx,
             price,
@@ -335,20 +347,14 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
 
         gc.collect()
         tick_count += 1
-
         print("Total", len(ctx.entries), len(ctx.simulations))
-        # items = list(ctx.window_prices.items())
-        # print(
-        #     tick_count,
-        #     len(ctx.window_prices),
-        #     items[0],
-        # )
 
     if snapshot:
         with open(
             f"{sanitize_filename(kwargs['startDate'])}.{len(ctx.simulations)} simulations.txt",
             "w",
         ) as outfile:
+            # TODO: Ensure whatever i'm trying to dump supports it
             json.dump(
                 ctx.simulations,
                 outfile,
@@ -366,31 +372,19 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
 
 pair = "XBTUSD"
 path = "../data/kraken"
-start_date1 = "2019-05-24 00:00"
-start_date2 = "2019-05-24 01:00"
-end_date = "2019-05-24 02:00"
-# end_date = "2019-05-27 00:00"
-# end_date = "2019-05-28"
+start_date = "2019-05-24 00:00"
+# end_date = "2019-05-24 02:00"
+end_date = "2019-05-25 00:00"
 
 conn = sqlite3.connect(database="output/signals/XBTUSD Aroon 2021-04-16T2204.db")
 cur = conn.cursor()
+
 loop(
     cur,
-    window=30,
+    window=180,
     pair=pair,
     path=path,
-    startDate=start_date2,
-    endDate=end_date,
-    fee=0.002,
-    # snapshot=True,
-)
-print("===========================================================================")
-loop(
-    cur,
-    window=30,
-    pair=pair,
-    path=path,
-    startDate=start_date1,
+    startDate=start_date,
     endDate=end_date,
     fee=0.002,
     # snapshot=True,

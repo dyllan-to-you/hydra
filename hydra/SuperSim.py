@@ -1,15 +1,14 @@
 import pathlib
 import argparse
 import time
-import pathlib
 import numpy as np
-import pandas as pd
+import pathlib
 from numba import njit
-import pyarrow.parquet as pq
 import vectorbt as vbt
 from vectorbt.portfolio.nb import create_order_nb
 from vectorbt.signals.factory import SignalFactory
 from hydra.utils import printd
+from hydra.PriceLoader import load_prices
 
 # vbt.settings.caching["blacklist"].append("Portfolio")
 # vbt.settings.caching["whitelist"].extend(
@@ -58,20 +57,6 @@ def order_func(oc, open):
     order = create_order_nb(size=10, price=oc.close[oc.i, oc.col])
     print(order)
     return order
-
-
-def load_prices(pair, path, startDate, endDate, interval) -> pd.DataFrame:
-    filepath = pathlib.Path(__file__).parent.absolute()
-    parqpath = filepath.joinpath(path, f"{pair}_{interval}.filled.parq")
-    table = pq.read_table(parqpath)
-    prices = table.to_pandas()
-    # print(prices.index)
-    if not isinstance(prices.index, pd.DatetimeIndex):
-        prices["time"] = pd.to_datetime(prices["time"], unit="s")
-        prices = prices.set_index("time")
-    prices = prices.loc[startDate:endDate]
-    prices.drop("trades", axis=1, inplace=True)
-    return prices
 
 
 def run_sim(

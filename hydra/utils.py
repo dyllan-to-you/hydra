@@ -1,10 +1,18 @@
 from datetime import datetime
 from functools import wraps
-from time import time
+from timeit import default_timer as timer
 import psutil
 import os
 
 process = psutil.Process(os.getpid())
+
+
+def str_to_datetime(str) -> datetime:
+    return (
+        datetime.strptime(str, "%Y-%m-%d %H:%M:%S")
+        if not isinstance(str, datetime)
+        else str
+    )
 
 
 def sanitize_filename(filename):
@@ -54,14 +62,16 @@ def get_methods(object, spacing=20):
             print(method.ljust(spacing) + " " + " getattr() failed")
 
 
-def timeme(f):
-    @wraps(f)
+def timeme(fn):
+    @wraps(fn)
     def wrap(*args, **kw):
-        ts = time()
-        result = f(*args, **kw)
-        te = time()
+        ts = timer()
+        result = fn(*args, **kw)
+        te = timer()
+
+        elapsed = te - ts
         # print("func:%r args:[%r, %r] took: %2.4f sec" % (f.__name__, args, kw, te - ts))
-        print("func:%r took: %2.4f sec" % (f.__name__, te - ts))
+        printd("func:%r took: %2.4f sec" % (fn.__name__, elapsed))
         return result
 
     return wrap

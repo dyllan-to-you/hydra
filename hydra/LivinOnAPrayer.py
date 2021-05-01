@@ -13,7 +13,7 @@ from six import Iterator
 from tqdm import tqdm
 
 from hydra.PriceLoader import load_prices
-from hydra.utils import printd, sanitize_filename, timeme
+from hydra.utils import printd, sanitize_filename, timeme, now as get_now_str
 
 from numba import njit
 
@@ -28,6 +28,7 @@ class Direction(Enum):
 class Order(NamedTuple):
     timestamp: datetime
     order: Direction
+    profit: float
 
 
 class Trade(NamedTuple):
@@ -171,6 +172,10 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
         exit_db="aroon_exit_ids",
     )
 
+    entry_ids, exit_ids = get_aroon_ids(ctx, window)
+    entry_ids_str = [str(id) for id in entry_ids]
+    exit_ids_str = [str(id) for id in exit_ids]
+
     total_profit = 1
     for price in tqdm(
         prices.itertuples(index=True),
@@ -178,38 +183,64 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
         leave=True,
         unit="tick",
     ):
-        total_profit *= tick(
+        profit = tick(
             ctx,
             price,
+            entry_ids=entry_ids_str,
+            exit_ids=exit_ids_str,
             window_is_full=tick_count >= window,
             use_cached_simulation=tick_count % 15 != 0,
         )
+        total_profit *= profit
 
         # timeme(gc.collect)()
         tick_count += 1
 
     with open(
-        f"{sanitize_filename(kwargs['startDate'])} orders.json",
+        f"{sanitize_filename(kwargs['startDate'])} orders.{sanitize_filename(get_now_str())}.json",
         "w",
     ) as outfile:
         json.dump(
             ctx.orders,
             outfile,
             indent=2,
-            default=lambda o: o.serialize()
-            if hasattr(o, "serialize")
-            else str(o)
-            if isinstance(o, datetime)
-            else o.__dict__,
+            default=lambda o: o.serialize() if hasattr(o, "serialize") else str(o),
         )
 
     printd("Profit:", total_profit)
     pp.pprint(ctx.orders)
 
 
+def get_aroon_ids(ctx: Context, window: int, multiplier: float = 0.5):
+    ctx.db.execute(
+        """
+        SELECT id
+        FROM aroon_entry_ids
+        WHERE interval * timeperiod < ?
+        """,
+        (round(window * multiplier),),
+    )
+    entry_ids = [id for (id,) in ctx.db.fetchall()]
+    ctx.db.execute(
+        """
+        SELECT id
+        FROM aroon_exit_ids
+        WHERE interval * timeperiod < ?
+        """,
+        (round(window * multiplier),),
+    )
+    exit_ids = [id for (id,) in ctx.db.fetchall()]
+    return entry_ids, exit_ids
+
+
 # @timeme
 def tick(
-    ctx: Context, price: PandasPrice, window_is_full=True, use_cached_simulation=True
+    ctx: Context,
+    price: PandasPrice,
+    entry_ids: List[int] = None,
+    exit_ids: List[int] = None,
+    window_is_full=True,
+    use_cached_simulation=True,
 ):
     price: Price = pandasPriceToOpenPrice(price)
     current_time, open_price = price
@@ -219,8 +250,8 @@ def tick(
     ctx.window_periods[current_time] = (open_price, [])
 
     ctx.current_time = current_time
-    exits = do_exits(ctx, price)
-    entries = do_entries(ctx)
+    exits = do_exits(ctx, price, ids=exit_ids)
+    entries = do_entries(ctx, ids=entry_ids)
     # cost = (len(ctx.entries) * len(exits)) + len(entries)
     # printd(
     #     f"{ctx.current_time} {len(ctx.simulations)=} {len(ctx.entries)=} {len(entries)=} {len(exits)=} {cost=}"
@@ -228,9 +259,10 @@ def tick(
     if not window_is_full:
         return 1
 
+    if not use_cached_simulation:
+        ctx.best_simulations = get_best_simulations(ctx)
+        # print("best_sims", len(ctx.best_simulations))
     if len(ctx.orders) == 0 or ctx.orders[-1][1] == Direction.SELL:
-        if not use_cached_simulation:
-            ctx.best_simulations = get_best_simulations(ctx)
         # printd("Best (Seeking Buy)", len(ctx.best_simulations))
         for key, *_ in ctx.best_simulations:
             entry_id, exit_id = get_indicator_id(ctx.id_base, key)
@@ -241,9 +273,13 @@ def tick(
                     Order(
                         ctx.current_time,
                         Direction.BUY,
+                        None
                         # TODO: Find indicator that triggered this buy and save that
                     )
                 )
+                # printd(
+                #     "BOUGHT", ctx.current_time, entry_id, exit_id, use_cached_simulation
+                # )
                 ctx.buy_price = open_price
                 break
     else:
@@ -252,8 +288,10 @@ def tick(
         if exit is not None and len(ctx.orders) != 0:
             buy_price = ctx.buy_price
             sell_price = open_price
-            ctx.orders.append(Order(ctx.current_time, Direction.SELL))
-            return (sell_price * ctx.sell_fee) / (buy_price * ctx.buy_fee)
+            profit = (sell_price * ctx.sell_fee) / (buy_price * ctx.buy_fee)
+            ctx.orders.append(Order(ctx.current_time, Direction.SELL, profit))
+            printd("SOLD", ctx.current_time, profit)
+            return profit
     return 1
 
 
@@ -284,9 +322,9 @@ def send_to_puppy_farm(ctx: Context, death_date: datetime, period: TimePeriod):
 
 
 # @timeme
-def do_exits(ctx: Context, price: Price):
+def do_exits(ctx: Context, price: Price, ids: List[int] = None):
     current_time, current_price = price
-    exits = get_exits(ctx.db, current_time)
+    exits = get_aroon_from_db(ctx.db, current_time, "exit", ids)
     keyed_exits = {}
     # entries = np.array(list(ctx.entries))[:, 1]
     for (exit_id,) in exits:
@@ -303,14 +341,31 @@ def do_exits(ctx: Context, price: Price):
 
 
 # @timeme
-def get_exits(db, current_time):
-    db.execute(
-        """
+def do_entries(ctx: Context, ids: List[int] = None):
+    entries = get_aroon_from_db(ctx.db, ctx.current_time, "entry", ids)
+    keyed_entries = {}
+    for (entry_id,) in entries:
+        ctx.entries.append(Indicator(ctx.current_time, entry_id))
+        keyed_entries[entry_id] = ctx.current_time
+        for sim in ctx.sims_by_entry.get(entry_id, []):
+            sim: Simulation = sim
+            if not sim.has_open_position():
+                sim.open_position(ctx.current_time)
+    return keyed_entries
+
+
+def get_aroon_from_db(db, current_time, direction, ids: List[int] = None):
+    if direction not in ["entry", "exit"]:
+        raise Exception(f"Invalid aroon direction {direction}")
+
+    query = f"""
         SELECT id
-        FROM aroon_exit
-        WHERE timestamp = ?""",
-        (str(current_time),),
-    )
+        FROM aroon_{direction}
+        WHERE timestamp = ?"""
+    if ids is not None:
+        query = f"{query} AND id IN ({','.join(ids)})"
+
+    db.execute(query, (str(current_time),))
     return db.fetchall()
 
 
@@ -353,32 +408,6 @@ def add_sim_history(ctx, current_price, sim):
 
 
 # @timeme
-def do_entries(ctx: Context):
-    entries = get_entries(ctx.db, ctx.current_time)
-    keyed_entries = {}
-    for (entry_id,) in entries:
-        ctx.entries.append(Indicator(ctx.current_time, entry_id))
-        keyed_entries[entry_id] = ctx.current_time
-        for sim in ctx.sims_by_entry.get(entry_id, []):
-            sim: Simulation = sim
-            if not sim.has_open_position():
-                sim.open_position(ctx.current_time)
-    return keyed_entries
-
-
-# @timeme
-def get_entries(db, current_time):
-    db.execute(
-        """
-        SELECT id
-        FROM aroon_entry
-        WHERE timestamp = ?""",
-        (str(current_time),),
-    )
-    return db.fetchall()
-
-
-# @timeme
 def get_best_simulations(
     ctx: Context, margin: float = 0.99, min_profit=1.03, min_trade_history=3
 ):
@@ -414,7 +443,7 @@ def get_best_simulations(
     ]
     print("qualifier", len(best))
     best_sorted = sorted(best, key=itemgetter(1, 2), reverse=True)
-    pp.pprint(best_sorted[:10])
+    pp.pprint(best_sorted[:5])
     return best_sorted
 
 
@@ -428,7 +457,8 @@ def get_indicator_id(id_base, sim_id):
 pair = "XBTUSD"
 path = "../data/kraken"
 start_date = "2019-07-15 00:00"
-end_date = "2019-07-20 00:00"
+end_date = "2019-07-16 00:00"
+# end_date = "2019-07-20 00:00"
 
 conn = sqlite3.connect(database="output/signals/XBTUSD Aroon 2021-04-16T2204.db")
 cur = conn.cursor()

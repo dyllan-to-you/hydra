@@ -132,6 +132,9 @@ class Context:
     window_periods: OrderedDict[datetime, TimePeriod]
     buy_price: float
     best_simulations: Iterator
+    current_order_simulations: List[
+        weakref.WeakSet[Simulation]
+    ]  # list of simulation ids
 
     id_base: int
 
@@ -148,7 +151,7 @@ class Context:
         self.ideal_exit = None
         self.window_periods = OrderedDict()
         self.best_buy_simulations = []
-        self.best_simulations = []
+        self.best_sell_simulations = []
 
         db.execute(
             f"""SELECT MAX(count) FROM (
@@ -199,17 +202,17 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
         tick_count += 1
 
     try:
-    with open(
+        with open(
             f"""{sanitize_filename(kwargs['startDate'])} orders.{
                 sanitize_filename(get_now_str())}.json""",
-        "w",
-    ) as outfile:
-        json.dump(
-            ctx.orders,
-            outfile,
-            indent=2,
-            default=lambda o: o.serialize() if hasattr(o, "serialize") else str(o),
-        )
+            "w",
+        ) as outfile:
+            json.dump(
+                ctx.orders,
+                outfile,
+                indent=2,
+                default=lambda o: o.serialize() if hasattr(o, "serialize") else str(o),
+            )
     except Exception:
         print("Failed to save file")
 
@@ -283,10 +286,17 @@ def tick(
                         # TODO: Find indicator that triggered this buy and save that
                     )
                 )
+                # Make list of simulations that have entry time = current time
+                # Use this list in get_best_sell_simulations until SELL
+
                 # calculate profit/loss each tick after buy, if profit hits above predicted profit
                 #   (with trailing loss?), then sell early, otherwise go with ideal profit
 
                 ctx.buy_price = open_price
+                ctx.current_order_simulations = [
+                    ctx.sims_by_entry.get(entry) for entry in current_entries
+                ]
+
                 return 1
     elif len(ctx.orders) != 0 and ctx.orders[-1][1] == Direction.BUY:
         if ctx.ideal_exit in current_exits:
@@ -297,6 +307,19 @@ def tick(
             printd("SOLD [ideal]", ctx.current_time, profit)
             ctx.best_buy_simulations = get_best_buy_simulations(ctx)
             return profit
+        else:
+            if not use_cached_simulation:
+                ctx.best_sell_simulations = get_best_sell_simulations(ctx)
+            for key, *_ in ctx.best_sell_simulations:
+                entry_id, exit_id = get_indicator_id(ctx.id_base, key)
+                if exit_id in current_exits:
+                    buy_price = ctx.buy_price
+                    sell_price = open_price
+                    profit = (sell_price * ctx.sell_fee) / (buy_price * ctx.buy_fee)
+                    ctx.orders.append(Order(ctx.current_time, Direction.SELL, profit))
+                    printd("SOLD [best]", ctx.current_time, profit)
+                    ctx.best_buy_simulations = get_best_buy_simulations(ctx)
+                    return profit
     return 1
 
 
@@ -453,6 +476,48 @@ def get_best_buy_simulations(
         if profit > minimum
     ]
     print("qualifier", len(best))
+    best_sorted = sorted(best, key=itemgetter(1, 2), reverse=True)
+    pp.pprint(best_sorted[:5])
+    return best_sorted
+
+    # @timeme
+
+
+def get_best_sell_simulations(
+    ctx: Context, margin: float = 0.99, min_profit=1.03, min_trade_history=3
+):
+    profits = [
+        (
+            sim.id,
+            weighted_profit,
+            sim.total_profit,
+            sim.success_count,
+            sim.history_count,
+            sim.streak_count,
+        )
+        for entry_set in ctx.current_order_simulations
+        for sim in entry_set
+        # decreases the effectiveness of caching sorted profits
+        if sim.history_count >= min_trade_history
+        and sim.total_profit >= min_profit
+        and (
+            weighted_profit := (
+                (sim.total_profit - 1) * (sim.success_count / sim.history_count)
+            )
+            + 1
+        )
+        >= min_profit
+    ]
+    if not len(profits):
+        return []
+    best_profit = max(profits, key=itemgetter(1))[1]
+    minimum = ((best_profit - min_profit) * margin) + min_profit
+    best = [
+        (key, profit, streak, suc, history)
+        for key, profit, tp, suc, history, streak in profits
+        if profit > minimum
+    ]
+    print("sell qualifier", len(best))
     best_sorted = sorted(best, key=itemgetter(1, 2), reverse=True)
     pp.pprint(best_sorted[:5])
     return best_sorted

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import json
 import pprint
 import sqlite3
@@ -6,7 +7,7 @@ from collections import deque
 from datetime import datetime, timedelta
 from enum import Enum
 from operator import attrgetter, itemgetter
-from typing import Deque, Dict, List, NamedTuple, OrderedDict
+from typing import Deque, Dict, List, NamedTuple, OrderedDict, Set
 import numpy as np
 import pandas
 from six import Iterator
@@ -123,7 +124,7 @@ class Context:
     db: sqlite3.Cursor
     entries: Deque[Indicator]
     simulations: Dict[str, Simulation]
-    sims_by_entry: Dict[str, weakref.WeakSet]
+    sims_by_entry: Dict[str, weakref.WeakSet[Simulation]]
     delta: timedelta
     fee: float
     orders: List[Order]
@@ -146,6 +147,7 @@ class Context:
         self.orders = []
         self.ideal_exit = None
         self.window_periods = OrderedDict()
+        self.best_buy_simulations = []
         self.best_simulations = []
 
         db.execute(
@@ -196,8 +198,10 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
         # timeme(gc.collect)()
         tick_count += 1
 
+    try:
     with open(
-        f"{sanitize_filename(kwargs['startDate'])} orders.{sanitize_filename(get_now_str())}.json",
+            f"""{sanitize_filename(kwargs['startDate'])} orders.{
+                sanitize_filename(get_now_str())}.json""",
         "w",
     ) as outfile:
         json.dump(
@@ -206,6 +210,8 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
             indent=2,
             default=lambda o: o.serialize() if hasattr(o, "serialize") else str(o),
         )
+    except Exception:
+        print("Failed to save file")
 
     printd("Profit:", total_profit)
     pp.pprint(ctx.orders)
@@ -250,8 +256,9 @@ def tick(
     ctx.window_periods[current_time] = (open_price, [])
 
     ctx.current_time = current_time
-    exits = do_exits(ctx, price, ids=exit_ids)
-    entries = do_entries(ctx, ids=entry_ids)
+    current_exits = do_exits(ctx, price, ids=exit_ids)
+    current_entries = do_entries(ctx, ids=entry_ids)
+
     # cost = (len(ctx.entries) * len(exits)) + len(entries)
     # printd(
     #     f"{ctx.current_time} {len(ctx.simulations)=} {len(ctx.entries)=} {len(entries)=} {len(exits)=} {cost=}"
@@ -259,15 +266,14 @@ def tick(
     if not window_is_full:
         return 1
 
-    if not use_cached_simulation:
-        ctx.best_simulations = get_best_simulations(ctx)
-        # print("best_sims", len(ctx.best_simulations))
     if len(ctx.orders) == 0 or ctx.orders[-1][1] == Direction.SELL:
-        # printd("Best (Seeking Buy)", len(ctx.best_simulations))
-        for key, *_ in ctx.best_simulations:
+        # printd("Best (Seeking Buy)", len(ctx.best_buy_simulations))
+        if not use_cached_simulation:
+            ctx.best_buy_simulations = get_best_buy_simulations(ctx)
+            # print("best_sims", len(ctx.best_buy_simulations))
+        for key, *_ in ctx.best_buy_simulations:
             entry_id, exit_id = get_indicator_id(ctx.id_base, key)
-            entry = entries.get(entry_id, None)
-            if entry is not None:
+            if entry_id in current_entries:
                 ctx.ideal_exit = exit_id
                 ctx.orders.append(
                     Order(
@@ -277,20 +283,19 @@ def tick(
                         # TODO: Find indicator that triggered this buy and save that
                     )
                 )
-                # printd(
-                #     "BOUGHT", ctx.current_time, entry_id, exit_id, use_cached_simulation
-                # )
+                # calculate profit/loss each tick after buy, if profit hits above predicted profit
+                #   (with trailing loss?), then sell early, otherwise go with ideal profit
+
                 ctx.buy_price = open_price
-                break
-    else:
-        # printd("Best (Seeking Sell)", len(ctx.best_simulations))
-        exit = exits.get(ctx.ideal_exit, None)
-        if exit is not None and len(ctx.orders) != 0:
+                return 1
+    elif len(ctx.orders) != 0 and ctx.orders[-1][1] == Direction.BUY:
+        if ctx.ideal_exit in current_exits:
             buy_price = ctx.buy_price
             sell_price = open_price
             profit = (sell_price * ctx.sell_fee) / (buy_price * ctx.buy_fee)
             ctx.orders.append(Order(ctx.current_time, Direction.SELL, profit))
-            printd("SOLD", ctx.current_time, profit)
+            printd("SOLD [ideal]", ctx.current_time, profit)
+            ctx.best_buy_simulations = get_best_buy_simulations(ctx)
             return profit
     return 1
 
@@ -325,10 +330,10 @@ def send_to_puppy_farm(ctx: Context, death_date: datetime, period: TimePeriod):
 def do_exits(ctx: Context, price: Price, ids: List[int] = None):
     current_time, current_price = price
     exits = get_aroon_from_db(ctx.db, current_time, "exit", ids)
-    keyed_exits = {}
+    current_exits = set()
     # entries = np.array(list(ctx.entries))[:, 1]
     for (exit_id,) in exits:
-        keyed_exits[exit_id] = current_time
+        current_exits.add(exit_id)
         for _, entry_id in ctx.entries:
             sim_id = get_simulation_id(ctx.id_base, entry_id, exit_id)
             sim = ctx.simulations.get(sim_id, None)
@@ -337,21 +342,21 @@ def do_exits(ctx: Context, price: Price, ids: List[int] = None):
             elif sim.has_open_position():
                 add_sim_history(ctx, current_price, sim)
 
-    return keyed_exits
+    return current_exits
 
 
 # @timeme
 def do_entries(ctx: Context, ids: List[int] = None):
     entries = get_aroon_from_db(ctx.db, ctx.current_time, "entry", ids)
-    keyed_entries = {}
+    current_entries = set()
     for (entry_id,) in entries:
         ctx.entries.append(Indicator(ctx.current_time, entry_id))
-        keyed_entries[entry_id] = ctx.current_time
+        current_entries.add(entry_id)
         for sim in ctx.sims_by_entry.get(entry_id, []):
             sim: Simulation = sim
             if not sim.has_open_position():
                 sim.open_position(ctx.current_time)
-    return keyed_entries
+    return current_entries
 
 
 def get_aroon_from_db(db, current_time, direction, ids: List[int] = None):
@@ -387,6 +392,7 @@ def create_sim(ctx, current_price, entry_id, sim_id):
 
     ctx.simulations[sim_id] = sim
     # provide lookup of simulations by buy indicator for use in entries
+    # TODO: does this still work if we aren't forcing garbage collection?
     bought: weakref.WeakSet = ctx.sims_by_entry.get(entry_id, None)
     if bought is None:
         bought = weakref.WeakSet()
@@ -408,8 +414,12 @@ def add_sim_history(ctx, current_price, sim):
 
 
 # @timeme
-def get_best_simulations(
-    ctx: Context, margin: float = 0.99, min_profit=1.03, min_trade_history=3
+def get_best_buy_simulations(
+    ctx: Context,
+    margin: float = 0.99,
+    min_profit=1.03,
+    min_trade_history=3,
+    min_success_ratio=0.8,
 ):
     profits = [
         (
@@ -423,6 +433,7 @@ def get_best_simulations(
         for key, sim in ctx.simulations.items()
         # decreases the effectiveness of caching sorted profits
         if sim.history_count >= min_trade_history
+        and sim.success_count / sim.history_count >= min_success_ratio
         and sim.total_profit >= min_profit
         and (
             weighted_profit := (
@@ -456,8 +467,8 @@ def get_indicator_id(id_base, sim_id):
 
 pair = "XBTUSD"
 path = "../data/kraken"
-start_date = "2019-07-15 00:00"
-end_date = "2019-07-16 00:00"
+start_date = "2019-08-01 00:00"
+end_date = "2019-08-20 00:00"
 # end_date = "2019-07-20 00:00"
 
 conn = sqlite3.connect(database="output/signals/XBTUSD Aroon 2021-04-16T2204.db")

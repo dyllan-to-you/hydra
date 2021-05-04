@@ -9,8 +9,6 @@ from datetime import datetime, timedelta
 from enum import Enum
 from operator import itemgetter
 from typing import Deque, Dict, List, NamedTuple, OrderedDict, Set
-
-# import numpy as np
 import pandas
 from six import Iterator
 from tqdm import tqdm
@@ -464,7 +462,7 @@ def get_best_buy_simulations(
             sim.success_count,
             sim.history_count,
             sim.total_history_count,
-            sim.decaying_profits,
+            decay_avg,
         )
         for key, sim in ctx.simulations.items()
         # decreases the effectiveness of caching sorted profits
@@ -478,27 +476,33 @@ def get_best_buy_simulations(
             + 1
         )
         >= min_profit
-    ]
-    if not len(profits):
-        return []
-    best_profit = max(profits, key=itemgetter(1))[1]
-    minimum = ((best_profit - min_profit) * margin) + min_profit
-    best = [
-        (key, profit, tp, decay, decay_avg, succ, history, tot_history)
-        for key, profit, tp, succ, history, tot_history, decay in profits
-        if profit > minimum
         and (
             decay_avg := sum(
                 [
-                    (((len(decay) - idx) / 2) / (avg_denominator) * decayed_profit)
-                    for idx, (decay_rate, decayed_profit) in enumerate(decay.items())
+                    (
+                        ((len(sim.decaying_profits) - idx) / 2)
+                        / (avg_denominator)
+                        * decayed_profit
+                    )
+                    for idx, (decay_rate, decayed_profit) in enumerate(
+                        sim.decaying_profits.items()
+                    )
                 ]
             )
         )
     ]
+    if not len(profits):
+        return []
+    best_profit = max(profits, key=itemgetter(6))[6]
+    minimum = ((best_profit - min_profit) * margin) + min_profit
+    best = [
+        (key, profit, tp, decay_avg, succ, history, tot_history)
+        for key, profit, tp, succ, history, tot_history, decay_avg in profits
+        if decay_avg > minimum
+    ]
 
     print("qualifier", len(best))
-    best_sorted = sorted(best, key=itemgetter(1, 4), reverse=True)
+    best_sorted = sorted(best, key=itemgetter(1, 3), reverse=True)
     pp.pprint(best_sorted[:5])
     return best_sorted
 

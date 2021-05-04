@@ -1,4 +1,5 @@
 from __future__ import annotations
+import copy
 import json
 import pprint
 import sqlite3
@@ -6,12 +7,14 @@ import weakref
 from collections import deque
 from datetime import datetime, timedelta
 from enum import Enum
-from operator import attrgetter, itemgetter
+from operator import itemgetter
 from typing import Deque, Dict, List, NamedTuple, OrderedDict, Set
-import numpy as np
+
+# import numpy as np
 import pandas
 from six import Iterator
 from tqdm import tqdm
+from statistics import mean
 
 from hydra.PriceLoader import load_prices
 from hydra.utils import printd, sanitize_filename, timeme, now as get_now_str
@@ -69,20 +72,44 @@ class Aroon(NamedTuple):
     threshold: int
 
 
+decaying_profits_template = {
+    0.05 ** (1 / 60): 1,
+    0.05 ** (1 / 180): 1,
+    0.05 ** (1 / 360): 1,
+    0.05 ** (1 / 720): 1,
+    0.05 ** (1 / 1440): 1,
+    0.05 ** (1 / 10080): 1,
+    0.05 ** (1 / 40320): 1,
+    0.05 ** (1 / 525600): 1,
+}
+avg_denominator = sum(
+    [
+        ((len(decaying_profits_template) - idx) / 2)
+        for idx in range(len(decaying_profits_template))
+    ]
+)
+
+
 class Simulation:
     id: int
     buy_time: datetime  # timestamp | None
     history_count: int
+    success_count: int
     total_profit: float
+    last_decay_time: datetime
+    decaying_profits: Dict[float, float]
 
-    def __init__(self, id):
+    def __init__(self, id, current_time):
         self.id = id
-
         self.total_profit = 1
         self.buy_time = None
         self.history_count = 0
+        self.total_history_count = 0
         self.success_count = 0
-        self.streak_count = 0
+        # array of tuples with initializing profit,
+        # decay rate in minutes (minutes until 95% decay), & last decay time
+        self.last_decay_time = current_time
+        self.decaying_profits = copy.deepcopy(decaying_profits_template)
 
     def __hash__(self):
         return self.id
@@ -102,12 +129,17 @@ class Simulation:
     def close_position(self, ctx, profit) -> Trade:
         trade = Trade(self.id, self.buy_time, profit)
         self.total_profit *= profit
+        for decay_rate in self.decaying_profits.keys():
+            time_delta = ctx.current_time - self.last_decay_time
+            self.decaying_profits[decay_rate] *= profit
+            self.decaying_profits[decay_rate] = (
+                self.decaying_profits[decay_rate] - 1
+            ) * (decay_rate ** (time_delta.total_seconds() / 60)) + 1
+        self.last_decay_time = ctx.current_time
         self.history_count += 1
-        if profit > 1.005:
+        self.total_history_count += 1
+        if profit >= 1.005:
             self.success_count += 1
-            self.streak_count += 1
-        elif profit < 1:
-            self.streak_count -= 1
 
         self.buy_time = None
         return trade
@@ -199,17 +231,17 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
         tick_count += 1
 
     try:
-    with open(
+        with open(
             f"""{sanitize_filename(kwargs['startDate'])} orders.{
-                sanitize_filename(get_now_str())}.json""",
-        "w",
-    ) as outfile:
-        json.dump(
-            ctx.orders,
-            outfile,
-            indent=2,
-            default=lambda o: o.serialize() if hasattr(o, "serialize") else str(o),
-        )
+                    sanitize_filename(get_now_str())}.json""",
+            "w",
+        ) as outfile:
+            json.dump(
+                ctx.orders,
+                outfile,
+                indent=2,
+                default=lambda o: o.serialize() if hasattr(o, "serialize") else str(o),
+            )
     except Exception:
         print("Failed to save file")
 
@@ -313,6 +345,7 @@ def pandasPriceToOpenPrice(price: PandasPrice) -> Price:
 
 # @timeme
 def send_to_puppy_farm(ctx: Context, death_date: datetime, period: TimePeriod):
+    # multithread
     for sim_id, buy_time, profit in period[1]:
         # Update simulation profit
         sim = ctx.simulations[sim_id]
@@ -332,13 +365,14 @@ def do_exits(ctx: Context, price: Price, ids: List[int] = None):
     exits = get_aroon_from_db(ctx.db, current_time, "exit", ids)
     current_exits = set()
     # entries = np.array(list(ctx.entries))[:, 1]
+    # multithread P1
     for (exit_id,) in exits:
         current_exits.add(exit_id)
         for _, entry_id in ctx.entries:
             sim_id = get_simulation_id(ctx.id_base, entry_id, exit_id)
             sim = ctx.simulations.get(sim_id, None)
             if sim is None:
-                create_sim(ctx, current_price, entry_id, sim_id)
+                create_sim(ctx, current_time, current_price, entry_id, sim_id)
             elif sim.has_open_position():
                 add_sim_history(ctx, current_price, sim)
 
@@ -349,6 +383,7 @@ def do_exits(ctx: Context, price: Price, ids: List[int] = None):
 def do_entries(ctx: Context, ids: List[int] = None):
     entries = get_aroon_from_db(ctx.db, ctx.current_time, "entry", ids)
     current_entries = set()
+    # multithread
     for (entry_id,) in entries:
         ctx.entries.append(Indicator(ctx.current_time, entry_id))
         current_entries.add(entry_id)
@@ -384,8 +419,8 @@ def calculate_profit(buy_fee, sell_fee, buy_price, sell_price):
     return (sell_price * sell_fee) / (buy_price * buy_fee)
 
 
-def create_sim(ctx, current_price, entry_id, sim_id):
-    sim = Simulation(sim_id)
+def create_sim(ctx, current_time, current_price, entry_id, sim_id):
+    sim = Simulation(sim_id, current_time)
     sim.open_position(ctx.current_time)
 
     add_sim_history(ctx, current_price, sim)
@@ -417,7 +452,7 @@ def add_sim_history(ctx, current_price, sim):
 def get_best_buy_simulations(
     ctx: Context,
     margin: float = 0.99,
-    min_profit=1.03,
+    min_profit=1.015,
     min_trade_history=3,
     min_success_ratio=0.8,
 ):
@@ -428,7 +463,8 @@ def get_best_buy_simulations(
             sim.total_profit,
             sim.success_count,
             sim.history_count,
-            sim.streak_count,
+            sim.total_history_count,
+            sim.decaying_profits,
         )
         for key, sim in ctx.simulations.items()
         # decreases the effectiveness of caching sorted profits
@@ -448,12 +484,21 @@ def get_best_buy_simulations(
     best_profit = max(profits, key=itemgetter(1))[1]
     minimum = ((best_profit - min_profit) * margin) + min_profit
     best = [
-        (key, profit, streak, suc, history)
-        for key, profit, tp, suc, history, streak in profits
+        (key, profit, tp, decay, decay_avg, succ, history, tot_history)
+        for key, profit, tp, succ, history, tot_history, decay in profits
         if profit > minimum
+        and (
+            decay_avg := sum(
+                [
+                    (((len(decay) - idx) / 2) / (avg_denominator) * decayed_profit)
+                    for idx, (decay_rate, decayed_profit) in enumerate(decay.items())
+                ]
+            )
+        )
     ]
+
     print("qualifier", len(best))
-    best_sorted = sorted(best, key=itemgetter(1, 2), reverse=True)
+    best_sorted = sorted(best, key=itemgetter(1, 4), reverse=True)
     pp.pprint(best_sorted[:5])
     return best_sorted
 
@@ -467,9 +512,12 @@ def get_indicator_id(id_base, sim_id):
 
 pair = "XBTUSD"
 path = "../data/kraken"
-start_date = "2019-08-01 00:00"
-end_date = "2019-08-20 00:00"
-# end_date = "2019-07-20 00:00"
+start_date = "2019-08-03 12:00"
+end_date = "2019-08-08 00:00"
+# start_date = "2019-08-07 19:00"
+# end_date = "2019-08-14 00:00"
+# start_date = "2019-08-13 19:00"
+# end_date = "2019-08-20 00:00"
 
 conn = sqlite3.connect(database="output/signals/XBTUSD Aroon 2021-04-16T2204.db")
 cur = conn.cursor()

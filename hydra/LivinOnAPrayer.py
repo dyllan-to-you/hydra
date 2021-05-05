@@ -247,7 +247,7 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
     pp.pprint(ctx.orders)
 
 
-def get_aroon_ids(ctx: Context, window: int, multiplier: float = 0.5):
+def get_aroon_ids(ctx: Context, window: int, multiplier: float = 1):
     ctx.db.execute(
         """
         SELECT id
@@ -360,12 +360,10 @@ def send_to_puppy_farm(ctx: Context, death_date: datetime, period: TimePeriod):
 # @timeme
 def do_exits(ctx: Context, price: Price, ids: List[int] = None):
     current_time, current_price = price
-    exits = get_aroon_from_db(ctx.db, current_time, "exit", ids)
-    current_exits = set()
+    current_exits = get_aroon_from_db(ctx.db, current_time, "exit", ids)
     # entries = np.array(list(ctx.entries))[:, 1]
     # multithread P1
-    for (exit_id,) in exits:
-        current_exits.add(exit_id)
+    for exit_id in current_exits:
         for _, entry_id in ctx.entries:
             sim_id = get_simulation_id(ctx.id_base, entry_id, exit_id)
             sim = ctx.simulations.get(sim_id, None)
@@ -379,12 +377,10 @@ def do_exits(ctx: Context, price: Price, ids: List[int] = None):
 
 # @timeme
 def do_entries(ctx: Context, ids: List[int] = None):
-    entries = get_aroon_from_db(ctx.db, ctx.current_time, "entry", ids)
-    current_entries = set()
+    current_entries = get_aroon_from_db(ctx.db, ctx.current_time, "entry", ids)
     # multithread
-    for (entry_id,) in entries:
+    for entry_id in current_entries:
         ctx.entries.append(Indicator(ctx.current_time, entry_id))
-        current_entries.add(entry_id)
         for sim in ctx.sims_by_entry.get(entry_id, []):
             sim: Simulation = sim
             if not sim.has_open_position():
@@ -404,7 +400,7 @@ def get_aroon_from_db(db, current_time, direction, ids: List[int] = None):
         query = f"{query} AND id IN ({','.join(ids)})"
 
     db.execute(query, (str(current_time),))
-    return db.fetchall()
+    return {item for (item,) in db.fetchall()}
 
 
 # @njit(fastmath=True)
@@ -450,9 +446,9 @@ def add_sim_history(ctx, current_price, sim):
 def get_best_buy_simulations(
     ctx: Context,
     margin: float = 0.99,
-    min_profit=1.015,
-    min_trade_history=3,
-    min_success_ratio=0.8,
+    min_profit=1.01,
+    min_trade_history=2,
+    min_success_ratio=0.75,
 ):
     profits = [
         (
@@ -516,12 +512,12 @@ def get_indicator_id(id_base, sim_id):
 
 pair = "XBTUSD"
 path = "../data/kraken"
-start_date = "2019-08-03 12:00"
-end_date = "2019-08-08 00:00"
-# start_date = "2019-08-07 19:00"
-# end_date = "2019-08-14 00:00"
-# start_date = "2019-08-13 19:00"
-# end_date = "2019-08-20 00:00"
+# start_date = "2019-07-01 00:00"
+# end_date = "2019-09-01 00:00"
+# start_date = "2019-09-01 00:00"
+# end_date = "2019-11-01 00:00"
+start_date = "2019-07-01 00:00"
+end_date = "2019-10-01 00:00"
 
 conn = sqlite3.connect(database="output/signals/XBTUSD Aroon 2021-04-16T2204.db")
 cur = conn.cursor()
@@ -533,7 +529,7 @@ loop(
     path=path,
     startDate=start_date,
     endDate=end_date,
-    fee=0.0016,
+    fee=0.0010,
     # snapshot=True,
 )
 conn.close()

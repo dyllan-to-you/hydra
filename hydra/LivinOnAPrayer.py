@@ -13,6 +13,8 @@ import pandas
 from six import Iterator
 from tqdm import tqdm
 from statistics import mean
+from retrying import retry
+import traceback
 
 from hydra.PriceLoader import load_prices
 from hydra.utils import printd, sanitize_filename, timeme, now as get_now_str
@@ -87,6 +89,14 @@ avg_denominator = sum(
     ]
 )
 
+"""
+Convert to dataframe with index being id
+each property here should be represented as a column
+decaying profiles can be a column with a dictionary
+replace the `__init__` function with a `function add_sim(df, id, current_time)`
+each method of Simulation should be a `function fn(df, id, *args)`
+"""
+
 
 class Simulation:
     id: int
@@ -124,16 +134,16 @@ class Simulation:
     def open_position(self, time: datetime):
         self.buy_time = time
 
-    def close_position(self, ctx, profit) -> Trade:
+    def close_position(self, current_time, profit) -> Trade:
         trade = Trade(self.id, self.buy_time, profit)
         self.total_profit *= profit
         for decay_rate in self.decaying_profits.keys():
-            time_delta = ctx.current_time - self.last_decay_time
+            time_delta = current_time - self.last_decay_time
             self.decaying_profits[decay_rate] *= profit
             self.decaying_profits[decay_rate] = (
                 self.decaying_profits[decay_rate] - 1
             ) * (decay_rate ** (time_delta.total_seconds() / 60)) + 1
-        self.last_decay_time = ctx.current_time
+        self.last_decay_time = current_time
         self.history_count += 1
         self.total_history_count += 1
         if profit >= 1.005:
@@ -153,8 +163,10 @@ class Context:
     prices: pandas.DataFrame
     db: sqlite3.Cursor
     entries: Deque[Indicator]
-    simulations: Dict[str, Simulation]
-    sims_by_entry: Dict[str, weakref.WeakSet[Simulation]]
+    simulations: Dict[str, Simulation]  # Should be a Dataframe
+    sims_by_entry: Dict[
+        str, weakref.WeakSet[Simulation]
+    ]  # should be a Dict[str, Set[int]] w/ Set of simulation Ids
     delta: timedelta
     fee: float
     orders: List[Order]
@@ -191,7 +203,7 @@ class Context:
 
 
 # @timeme
-def loop(db, window=60, fee=0, snapshot=False, **kwargs):
+def loop(db, window=60, fee=0, save=False, **kwargs):
     prices = load_prices(interval=1, **kwargs)
     tick_count = 0
     # buys: list((aroonKey, timestamp))
@@ -209,42 +221,59 @@ def loop(db, window=60, fee=0, snapshot=False, **kwargs):
     exit_ids_str = [str(id) for id in exit_ids]
 
     total_profit = 1
-    for price in tqdm(
-        prices.itertuples(index=True),
-        total=len(prices.index),
-        leave=True,
-        unit="tick",
-    ):
-        profit = tick(
-            ctx,
-            price,
-            entry_ids=entry_ids_str,
-            exit_ids=exit_ids_str,
-            window_is_full=tick_count >= window,
-            use_cached_simulation=tick_count % 15 != 0,
-        )
-        total_profit *= profit
-
-        # timeme(gc.collect)()
-        tick_count += 1
-
     try:
-        with open(
-            f"""{sanitize_filename(kwargs['startDate'])} orders.{
-                    sanitize_filename(get_now_str())}.json""",
-            "w",
-        ) as outfile:
-            json.dump(
-                ctx.orders,
-                outfile,
-                indent=2,
-                default=lambda o: o.serialize() if hasattr(o, "serialize") else str(o),
+        for price in tqdm(
+            prices.itertuples(index=True),
+            total=len(prices.index),
+            leave=True,
+            unit="tick",
+        ):
+            profit = tick(
+                ctx,
+                price,
+                entry_ids=entry_ids_str,
+                exit_ids=exit_ids_str,
+                window_is_full=tick_count >= window,
+                use_cached_simulation=tick_count % 15 != 0,
             )
-    except Exception:
-        print("Failed to save file")
+            total_profit *= profit
 
-    printd("Profit:", total_profit)
-    pp.pprint(ctx.orders)
+            # timeme(gc.collect)()
+            tick_count += 1
+    except Exception as e:
+        traceback.print_tb(e.__traceback__)
+    except KeyboardInterrupt:
+        pass
+
+    if save:
+        try:
+            with open(
+                f"""{sanitize_filename(kwargs['startDate'])} orders.{
+                        sanitize_filename(get_now_str())}.json""",
+                "w",
+            ) as outfile:
+                json.dump(
+                    ctx.orders,
+                    outfile,
+                    indent=2,
+                    default=lambda o: o.serialize()
+                    if hasattr(o, "serialize")
+                    else str(o),
+                )
+
+        except Exception:
+            print("Failed to save file")
+
+    printd(
+        "Profit:",
+        total_profit,
+        "Orders:",
+        json.dumps(
+            ctx.orders,
+            indent=2,
+            default=lambda o: o.serialize() if hasattr(o, "serialize") else str(o),
+        ),
+    )
 
 
 def get_aroon_ids(ctx: Context, window: int, multiplier: float = 1):
@@ -309,7 +338,7 @@ def tick(
                     Order(
                         ctx.current_time,
                         Direction.BUY,
-                        None
+                        0
                         # TODO: Find indicator that triggered this buy and save that
                     )
                 )
@@ -366,6 +395,7 @@ def do_exits(ctx: Context, price: Price, ids: List[int] = None):
     for exit_id in current_exits:
         for _, entry_id in ctx.entries:
             sim_id = get_simulation_id(ctx.id_base, entry_id, exit_id)
+            # TODO: [df] replace with df lookup
             sim = ctx.simulations.get(sim_id, None)
             if sim is None:
                 create_sim(ctx, current_time, current_price, entry_id, sim_id)
@@ -381,6 +411,9 @@ def do_entries(ctx: Context, ids: List[int] = None):
     # multithread
     for entry_id in current_entries:
         ctx.entries.append(Indicator(ctx.current_time, entry_id))
+        # TODO: [df] get set of simulation ids using each entry
+        # see whether ctx.simulations contains each simulation ID
+        # if it doesn't, delete it
         for sim in ctx.sims_by_entry.get(entry_id, []):
             sim: Simulation = sim
             if not sim.has_open_position():
@@ -388,6 +421,7 @@ def do_entries(ctx: Context, ids: List[int] = None):
     return current_entries
 
 
+@retry(wait_fixed=2000)
 def get_aroon_from_db(db, current_time, direction, ids: List[int] = None):
     if direction not in ["entry", "exit"]:
         raise Exception(f"Invalid aroon direction {direction}")
@@ -419,9 +453,10 @@ def create_sim(ctx, current_time, current_price, entry_id, sim_id):
 
     add_sim_history(ctx, current_price, sim)
 
+    # TODO: [df] replace with df lookup
     ctx.simulations[sim_id] = sim
     # provide lookup of simulations by buy indicator for use in entries
-    # TODO: does this still work if we aren't forcing garbage collection?
+    # TODO: [df] Use normal set instead of weakset
     bought: weakref.WeakSet = ctx.sims_by_entry.get(entry_id, None)
     if bought is None:
         bought = weakref.WeakSet()
@@ -438,7 +473,7 @@ def add_sim_history(ctx, current_price, sim):
     sell_price = current_price
 
     profit = calculate_profit(ctx.buy_fee, ctx.sell_fee, buy_price, sell_price)
-    trade = sim.close_position(ctx, profit)
+    trade = sim.close_position(ctx.current_time, profit)
     trades.append(trade)
 
 
@@ -447,7 +482,7 @@ def get_best_buy_simulations(
     ctx: Context,
     margin: float = 0.99,
     min_profit=1.01,
-    min_trade_history=2,
+    min_trade_history=3,
     min_success_ratio=0.75,
 ):
     profits = [
@@ -460,6 +495,7 @@ def get_best_buy_simulations(
             sim.total_history_count,
             decay_avg,
         )
+        # TODO: [df] loop through df
         for key, sim in ctx.simulations.items()
         # decreases the effectiveness of caching sorted profits
         if sim.history_count >= min_trade_history
@@ -497,10 +533,12 @@ def get_best_buy_simulations(
         if decay_avg > minimum
     ]
 
-    print("qualifier", len(best))
-    best_sorted = sorted(best, key=itemgetter(1, 3), reverse=True)
-    pp.pprint(best_sorted[:5])
-    return best_sorted
+    if len(best) > 0:
+        print("qualifier", len(best))
+        best_sorted = sorted(best, key=itemgetter(1, 3), reverse=True)
+        pp.pprint(best_sorted[:5])
+        return best_sorted
+    return []
 
 
 # @njit(fastmath=True)
@@ -519,17 +557,24 @@ path = "../data/kraken"
 start_date = "2019-07-01 00:00"
 end_date = "2019-10-01 00:00"
 
-conn = sqlite3.connect(database="output/signals/XBTUSD Aroon 2021-04-16T2204.db")
-cur = conn.cursor()
 
-loop(
-    cur,
-    window=300,
-    pair=pair,
-    path=path,
-    startDate=start_date,
-    endDate=end_date,
-    fee=0.0010,
-    # snapshot=True,
-)
-conn.close()
+if __name__ == "__main__":
+    try:
+        conn = sqlite3.connect(
+            database="output/signals/XBTUSD Aroon 2021-04-16T2204.db"
+        )
+        cur = conn.cursor()
+        loop(
+            cur,
+            window=300,
+            pair=pair,
+            path=path,
+            startDate=start_date,
+            endDate=end_date,
+            fee=0.0010,
+            # snapshot=True,
+        )
+    except KeyboardInterrupt as e:
+        print("KeyboardInterrupt", e)
+    finally:
+        conn.close()

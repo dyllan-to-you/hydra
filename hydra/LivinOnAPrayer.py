@@ -163,7 +163,8 @@ class Context:
     prices: pandas.DataFrame
     db: sqlite3.Cursor
     entries: Deque[Indicator]
-    simulations: Dict[str, Simulation]  # Should be a Dataframe
+    simulations: Dict[str, Simulation]
+    # simulations_df: DataFrame
     sims_by_entry: Dict[
         str, weakref.WeakSet[Simulation]
     ]  # should be a Dict[str, Set[int]] w/ Set of simulation Ids
@@ -177,11 +178,10 @@ class Context:
 
     id_base: int
 
-    def __init__(self, prices, db: sqlite3.Cursor, delta, fee, entry_db, exit_db):
+    def __init__(self, prices, db: sqlite3.Cursor, delta, fee, entry_ids, exit_ids):
         self.prices = prices
         self.db = db
         self.entries = deque()
-        self.simulations = dict()
         self.sims_by_entry = dict()
         self.delta = timedelta(minutes=delta)
         self.buy_fee = 1 + fee
@@ -191,32 +191,26 @@ class Context:
         self.window_periods = OrderedDict()
         self.best_buy_simulations = []
         self.best_simulations = []
+        self.id_base = max(len(entry_ids), len(exit_ids))
 
-        db.execute(
-            f"""SELECT MAX(count) FROM (
-                SELECT COUNT(*) count FROM {entry_db}
-                UNION
-                SELECT COUNT(*) count FROM {exit_db});"""
-        )
-        (base,) = db.fetchone()
-        self.id_base = base
+        self.simulations = dict()
 
 
 # @timeme
-def loop(db, window=60, fee=0, save=False, **kwargs):
+def loop(db: sqlite3.Cursor, window=60, fee=0, save=False, **kwargs):
     prices = load_prices(interval=1, **kwargs)
     tick_count = 0
     # buys: list((aroonKey, timestamp))
+    entry_ids, exit_ids = get_aroon_ids(db, window)
     ctx = Context(
         prices=prices,
         delta=window,
         fee=fee,
         db=db,
-        entry_db="aroon_entry_ids",
-        exit_db="aroon_exit_ids",
+        entry_ids=entry_ids,
+        exit_ids=exit_ids,
     )
 
-    entry_ids, exit_ids = get_aroon_ids(ctx, window)
     entry_ids_str = [str(id) for id in entry_ids]
     exit_ids_str = [str(id) for id in exit_ids]
 
@@ -276,8 +270,8 @@ def loop(db, window=60, fee=0, save=False, **kwargs):
     )
 
 
-def get_aroon_ids(ctx: Context, window: int, multiplier: float = 1):
-    ctx.db.execute(
+def get_aroon_ids(db: sqlite3.Cursor, window: int, multiplier: float = 0.66):
+    db.execute(
         """
         SELECT id
         FROM aroon_entry_ids
@@ -285,8 +279,8 @@ def get_aroon_ids(ctx: Context, window: int, multiplier: float = 1):
         """,
         (round(window * multiplier),),
     )
-    entry_ids = [id for (id,) in ctx.db.fetchall()]
-    ctx.db.execute(
+    entry_ids = [id for (id,) in db.fetchall()]
+    db.execute(
         """
         SELECT id
         FROM aroon_exit_ids
@@ -294,7 +288,7 @@ def get_aroon_ids(ctx: Context, window: int, multiplier: float = 1):
         """,
         (round(window * multiplier),),
     )
-    exit_ids = [id for (id,) in ctx.db.fetchall()]
+    exit_ids = [id for (id,) in db.fetchall()]
     return entry_ids, exit_ids
 
 

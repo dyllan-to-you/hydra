@@ -10,11 +10,14 @@ from enum import Enum
 from operator import itemgetter
 from typing import Deque, Dict, List, NamedTuple, OrderedDict, Set
 import pandas
+from pandas import DataFrame
 from six import Iterator
 from tqdm import tqdm
 from statistics import mean
 from retrying import retry
 import traceback
+
+# import ray
 
 from hydra.PriceLoader import load_prices
 from hydra.utils import printd, sanitize_filename, timeme, now as get_now_str
@@ -98,6 +101,7 @@ each method of Simulation should be a `function fn(df, id, *args)`
 """
 
 
+# @ray.remote
 class Simulation:
     id: int
     buy_time: datetime  # timestamp | None
@@ -105,7 +109,7 @@ class Simulation:
     success_count: int
     total_profit: float
     last_decay_time: datetime
-    decaying_profits: Dict[float, float]
+    # decaying_profits: Dict[float, float]
 
     def __init__(self, id, current_time):
         self.id = id
@@ -242,7 +246,7 @@ def loop(db: sqlite3.Cursor, window=60, fee=0, save=False, **kwargs):
     if save:
         try:
             with open(
-                f"""{sanitize_filename(kwargs['startDate'])} orders.{
+                f"""output/{sanitize_filename(kwargs['startDate'])} orders.{
                         sanitize_filename(get_now_str())}.json""",
                 "w",
             ) as outfile:
@@ -475,9 +479,9 @@ def add_sim_history(ctx, current_price, sim):
 def get_best_buy_simulations(
     ctx: Context,
     margin: float = 0.99,
-    min_profit=1.01,
+    min_profit=1.015,
     min_trade_history=3,
-    min_success_ratio=0.75,
+    min_success_ratio=0.8,
 ):
     profits = [
         (
@@ -493,6 +497,7 @@ def get_best_buy_simulations(
         for key, sim in ctx.simulations.items()
         # decreases the effectiveness of caching sorted profits
         if sim.history_count >= min_trade_history
+        and sim.total_history_count >= 20
         and sim.success_count / sim.history_count >= min_success_ratio
         and sim.total_profit >= min_profit
         and (
@@ -554,6 +559,7 @@ end_date = "2019-10-01 00:00"
 
 if __name__ == "__main__":
     try:
+        # ray.init()
         conn = sqlite3.connect(
             database="output/signals/XBTUSD Aroon 2021-04-16T2204.db"
         )
@@ -572,3 +578,4 @@ if __name__ == "__main__":
         print("KeyboardInterrupt", e)
     finally:
         conn.close()
+        # ray.shutdown()

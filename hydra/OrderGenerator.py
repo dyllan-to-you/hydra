@@ -1,6 +1,6 @@
+from timeit import default_timer as timer
 from tqdm.std import tqdm
-from hydra.PriceLoader import load_prices
-from hydra.LivinOnAPrayer import Direction, get_simulation_id
+from hydra.SimManager import load_prices, get_simulation_id
 from math import floor
 from hydra.utils import now, printd, timeme, write
 import sqlite3
@@ -15,10 +15,11 @@ import pandas as pd
 
 pp = pprint.PrettyPrinter(indent=2)
 MAX_MEMORY_MB = 4 * 1024
-last_entry = 46
-last_exit = 12
+last_entry = 92
+last_exit = 40
 
 
+@timeme
 def gen_parq(conn, table):
     df = pd.read_sql(
         f"SELECT id, timestamp from {table}",
@@ -26,11 +27,8 @@ def gen_parq(conn, table):
         parse_dates="timestamp",
     )
 
-    # df["timestamp"] = df["timestamp"].astype("int64") // 10 ** 9
-    # df["timestamp"] = df["timestamp"].astype("uint32")
     df["id"] = df["id"].astype("uint16")
-    printd(df.dtypes, df.index)
-    df.to_parquet(f"{table}.ts.parquet")
+    df.to_parquet(f"{table}.ts.parquet", index=False)
 
 
 # @timeme
@@ -58,33 +56,35 @@ def crossings_nonzero_neg2pos(data):
 
 
 @timeme
-def main(*args, last_entry=0, last_exit=0):
-    entries_df = pd.read_parquet("aroon_entry.parquet")
-    exits_df = pd.read_parquet("aroon_exit.parquet")
+def main(last_entry=0, last_exit=0):
+    entries_df = pd.read_parquet("aroon_entry.ts.parquet")
+    exits_df = pd.read_parquet("aroon_exit.ts.parquet")
 
-    entries_df["timestamp"] = pd.to_datetime(entries_df["timestamp"], unit="s")
-    exits_df["timestamp"] = pd.to_datetime(exits_df["timestamp"], unit="s")
-
+    # entries_df["timestamp"] = pd.to_datetime(entries_df["timestamp"], unit="s")
+    # exits_df["timestamp"] = pd.to_datetime(exits_df["timestamp"], unit="s")
+    entries_df = entries_df.set_index(["id", "timestamp"])
+    exits_df = exits_df.set_index(["id", "timestamp"])
     entries_df["val"] = 1
     exits_df["val"] = -1
+    print(entries_df, exits_df)
 
-    entry_ids = entries_df["id"].unique()[:]
-    exit_ids = exits_df["id"].unique()[:]
+    entry_ids = entries_df.index.unique(level=0)
+    exit_ids = exits_df.index.unique(level=0)
 
     prices = load_prices("XBTUSD", "../data/kraken")[["open"]]
     prices["open"] = prices["open"].astype("float32")
-    print(prices[0:5])
     id_base = max(len(entry_ids), len(exit_ids))
     saves = 0
     acc = []
     acc_mem = 0
+    ts = timer()
+
     with tqdm(total=(len(entry_ids) - last_entry) * len(exit_ids)) as pbar:
         for entry_idx, entry in enumerate(tqdm(entry_ids)):
             if entry_idx < last_entry:
-                pbar.set_description(f"Skipping Entries {entry_idx}/{last_entry}")
+                pbar.set_description(f"Skipping Entries {entry_idx}/{last_entry-1}")
                 continue
-            entries = entries_df.loc[entries_df["id"] == entry]
-            entries = entries.set_index("timestamp").drop("id", axis=1)
+            entries = entries_df.loc[entry, :]
             for exit_idx, exit in enumerate(tqdm(exit_ids, leave=False)):
                 if entry_idx == last_entry and exit_idx <= last_exit:
                     pbar.update(1)
@@ -93,8 +93,7 @@ def main(*args, last_entry=0, last_exit=0):
                     )
                     continue
                 simulation_id = get_simulation_id(id_base, entry, exit)
-                exits = exits_df.loc[exits_df["id"] == exit]
-                exits = exits.set_index("timestamp").drop("id", axis=1)
+                exits = exits_df.loc[exit, :]
                 orders = exits.join(entries, how="outer", lsuffix="ex")
                 order = orders.val.fillna(0) + orders.valex.fillna(0)
                 buys_idx = crossings_nonzero_neg2pos(order.to_numpy())
@@ -110,7 +109,8 @@ def main(*args, last_entry=0, last_exit=0):
                 ]
                 order_prices["year"] = order_prices.index.year.astype("uint16")
                 order_prices["month"] = order_prices.index.month.astype("uint8")
-                order_prices["simulation"] = simulation_id.astype("uint32")
+                order_prices["simulation"] = simulation_id
+                order_prices["simulation"] = order_prices["simulation"].astype("uint16")
                 acc.append(order_prices)
                 acc_mem += order_prices.memory_usage(index=True).sum() / 1024 / 1024
 
@@ -121,22 +121,22 @@ def main(*args, last_entry=0, last_exit=0):
                     pbar.set_description(
                         f"{saves=} {len(acc)=} mem={acc_mem:.2f}/{MAX_MEMORY_MB}MB [SAVING]"
                     )
-                    pq.write_to_dataset(
-                        pa.Table.from_pandas(
-                            pd.concat(acc),
-                            columns=[
-                                "simulation",
-                                "open",
-                                "direction",
-                                "year",
-                                "month",
-                            ],
-                        ),
-                        root_path="F:\\hydra\\orders",
-                        partition_cols=["year", "month"],
-                        compression="brotli",
-                        compression_level=6,
-                    )
+                    # pq.write_to_dataset(
+                    #     pa.Table.from_pandas(
+                    #         pd.concat(acc),
+                    #         columns=[
+                    #             "simulation",
+                    #             "open",
+                    #             "direction",
+                    #             "year",
+                    #             "month",
+                    #         ],
+                    #     ),
+                    #     root_path="F:/hydra/orders",
+                    #     partition_cols=["year", "month"],
+                    #     compression="brotli",
+                    #     compression_level=6,
+                    # )
                     acc_mem = 0
                     acc = []
                     saves += 1
@@ -146,6 +146,12 @@ def main(*args, last_entry=0, last_exit=0):
                     )
                     last_entry = entry_idx
                     last_exit = exit_idx
+                    te = timer()
+                    elapsed = te - ts
+                    ts = timer()
+                    pbar.write(
+                        f"Entry: {entry_idx=} Exit: {exit_idx=} {simulation_id} Time to save: {elapsed:2.4f}s"
+                    )
                 pbar.update(1)
 
 
@@ -155,9 +161,9 @@ if __name__ == "__main__":
             database="output/signals/XBTUSD Aroon 2021-04-16T2204.db"
         )
         # cur = conn.cursor()
-        main(conn, last_entry=last_entry, last_exit=last_exit)
         # gen_parq(conn, "aroon_entry")
         # gen_parq(conn, "aroon_exit")
+        main(last_entry=last_entry, last_exit=last_exit)
     except KeyboardInterrupt as e:
         print("KeyboardInterrupt", e)
     finally:

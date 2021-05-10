@@ -15,3 +15,7 @@ def load_prices(pair, path, startDate=None, endDate=None, interval=1) -> pd.Data
     if startDate is not None and endDate is not None:
         prices = prices.loc[startDate:endDate]
     return prices.drop("trades", axis=1)
+
+
+def get_simulation_id(id_base, entry, exit):
+    return entry * id_base + exit

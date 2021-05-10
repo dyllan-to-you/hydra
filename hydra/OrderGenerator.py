@@ -16,7 +16,9 @@ import pandas as pd
 pp = pprint.PrettyPrinter(indent=2)
 MAX_MEMORY_MB = 4 * 1024
 last_entry = 92
-last_exit = 40
+last_exit = 3000
+last_entry = 0
+last_exit = -1
 
 
 @timeme
@@ -57,16 +59,16 @@ def crossings_nonzero_neg2pos(data):
 
 @timeme
 def main(last_entry=0, last_exit=0):
-    entries_df = pd.read_parquet("aroon_entry.ts.parquet")
-    exits_df = pd.read_parquet("aroon_exit.ts.parquet")
+    entries_df = pd.read_parquet("aroon_entry.parquet")
+    exits_df = pd.read_parquet("aroon_exit.parquet")
 
-    # entries_df["timestamp"] = pd.to_datetime(entries_df["timestamp"], unit="s")
-    # exits_df["timestamp"] = pd.to_datetime(exits_df["timestamp"], unit="s")
+    entries_df["timestamp"] = pd.to_datetime(entries_df["timestamp"], unit="s")
+    exits_df["timestamp"] = pd.to_datetime(exits_df["timestamp"], unit="s")
     entries_df = entries_df.set_index(["id", "timestamp"])
     exits_df = exits_df.set_index(["id", "timestamp"])
     entries_df["val"] = 1
     exits_df["val"] = -1
-    print(entries_df, exits_df)
+    # print(entries_df, exits_df)
 
     entry_ids = entries_df.index.unique(level=0)
     exit_ids = exits_df.index.unique(level=0)
@@ -80,27 +82,37 @@ def main(last_entry=0, last_exit=0):
     ts = timer()
 
     with tqdm(total=(len(entry_ids) - last_entry) * len(exit_ids)) as pbar:
-        for entry_idx, entry in enumerate(tqdm(entry_ids)):
+        for entry_idx, (entry_id, entries) in enumerate(
+            tqdm(entries_df.groupby(level=0))
+        ):
             if entry_idx < last_entry:
                 pbar.set_description(f"Skipping Entries {entry_idx}/{last_entry-1}")
                 continue
-            entries = entries_df.loc[entry, :]
-            for exit_idx, exit in enumerate(tqdm(exit_ids, leave=False)):
+            entries = entries.reset_index(level=0, drop=True)
+            # entries = entries_df.loc[entry, :]
+            # entries = entries_df.loc[entries_df["id"] == entry]
+            # entries = entries.set_index("timestamp").drop("id", axis=1)
+            for exit_idx, (exit_id, exits) in enumerate(
+                tqdm(exits_df.groupby(level=0), leave=False)
+            ):
                 if entry_idx == last_entry and exit_idx <= last_exit:
                     pbar.update(1)
                     pbar.set_description(
                         f"Skipping Exits {exit_idx}/{last_exit} for entry {last_entry}"
                     )
                     continue
-                simulation_id = get_simulation_id(id_base, entry, exit)
-                exits = exits_df.loc[exit, :]
+                simulation_id = get_simulation_id(id_base, entry_id, exit_id)
+                exits = exits.reset_index(level=0, drop=True)
+                # exits = exits_df.loc[exit, :]
+                # exits = exits_df.loc[exits_df["id"] == exit]
+                # exits = exits.set_index("timestamp").drop("id", axis=1)
                 orders = exits.join(entries, how="outer", lsuffix="ex")
-                order = orders.val.fillna(0) + orders.valex.fillna(0)
-                buys_idx = crossings_nonzero_neg2pos(order.to_numpy())
-                sells_idx = crossings_nonzero_pos2neg(order.to_numpy())
+                orders = orders.val.fillna(0) + orders.valex.fillna(0)
+                buys_idx = crossings_nonzero_neg2pos(orders.to_numpy())
+                sells_idx = crossings_nonzero_pos2neg(orders.to_numpy())
 
-                buys = prices.loc[order.iloc[buys_idx].index]
-                sells = prices.loc[order.iloc[sells_idx].index]
+                buys = prices.loc[orders.iloc[buys_idx].index]
+                sells = prices.loc[orders.iloc[sells_idx].index]
 
                 buys["direction"] = True
                 sells["direction"] = False
@@ -110,7 +122,7 @@ def main(last_entry=0, last_exit=0):
                 order_prices["year"] = order_prices.index.year.astype("uint16")
                 order_prices["month"] = order_prices.index.month.astype("uint8")
                 order_prices["simulation"] = simulation_id
-                order_prices["simulation"] = order_prices["simulation"].astype("uint16")
+                order_prices["simulation"] = order_prices["simulation"].astype("uint32")
                 acc.append(order_prices)
                 acc_mem += order_prices.memory_usage(index=True).sum() / 1024 / 1024
 
@@ -119,7 +131,8 @@ def main(last_entry=0, last_exit=0):
                 )
                 if acc_mem >= MAX_MEMORY_MB:
                     pbar.set_description(
-                        f"{saves=} {len(acc)=} mem={acc_mem:.2f}/{MAX_MEMORY_MB}MB [SAVING]"
+                        f"""{saves=} {len(acc)=} mem={acc_mem:.2f}/{
+                            MAX_MEMORY_MB}MB [SAVING]"""
                     )
                     # pq.write_to_dataset(
                     #     pa.Table.from_pandas(
@@ -153,6 +166,7 @@ def main(last_entry=0, last_exit=0):
                         f"Entry: {entry_idx=} Exit: {exit_idx=} {simulation_id} Time to save: {elapsed:2.4f}s"
                     )
                 pbar.update(1)
+            return
 
 
 if __name__ == "__main__":

@@ -16,10 +16,7 @@ from tqdm import tqdm
 from statistics import mean
 from retrying import retry
 import traceback
-
-# import ray
-
-from hydra.PriceLoader import load_prices
+from hydra.SimManager import load_prices, get_simulation_id
 from hydra.utils import printd, sanitize_filename, timeme, now as get_now_str
 
 from numba import njit
@@ -433,11 +430,6 @@ def get_aroon_from_db(db, current_time, direction, ids: List[int] = None):
 
     db.execute(query, (str(current_time),))
     return {item for (item,) in db.fetchall()}
-
-
-# @njit(fastmath=True)
-def get_simulation_id(id_base, entry, exit):
-    return entry * id_base + exit
 
 
 @njit(fastmath=True)

@@ -28,6 +28,18 @@ def now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def get_mem(unit=None):
+    mem = process.memory_info().rss
+    if unit is None:
+        return mem
+    if unit == "KB":
+        return mem / 1024
+    if unit == "MB":
+        return mem / 1024 ** 2
+    if unit == "GB":
+        return mem / 1024 ** 3
+
+
 def printd(*arg):
     print(f"[{now()}] ({process.memory_info().rss / 1024 / 1024:.2f})", *arg)
 

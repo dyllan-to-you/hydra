@@ -18,10 +18,10 @@ import pandas as pd
 # import modin.pandas as pd
 
 pp = pprint.PrettyPrinter(indent=2)
-MAX_MEMORY = 4 * 1024 ** 3
+MAX_MEMORY = 1 * 1024 ** 3
 MAX_MEMORY_MB = MAX_MEMORY / 1024 ** 2
-last_entry = 2
-last_exit = 115
+last_entry = None
+last_exit = None
 
 
 @timeme
@@ -122,6 +122,9 @@ def main(last_entry=None, last_exit=None, skip_save=False):
                             MAX_MEMORY_MB}"""
                     )
 
+                # if entry_idx == 181 and exit_idx == 403:
+                #     return
+
                 simulation_id = get_simulation_id(id_base, entry_id, exit_id)
                 exits = exits.reset_index(level=0, drop=True)
                 # exits = exits_df.loc[exit, :]
@@ -205,8 +208,8 @@ def main(last_entry=None, last_exit=None, skip_save=False):
                             root_path="F:/hydra/orders",
                             partition_cols=["year", "month", "day"],
                             partition_filename_cb=partition_filename(suffix=".buys"),
-                            compression="brotli",
-                            compression_level=6,
+                            compression="ZSTD",
+                            # compression_level=6,
                         )
 
                         # Sells
@@ -225,8 +228,8 @@ def main(last_entry=None, last_exit=None, skip_save=False):
                             root_path="F:/hydra/orders",
                             partition_cols=["year", "month", "day"],
                             partition_filename_cb=partition_filename(suffix=".sells"),
-                            compression="brotli",
-                            compression_level=6,
+                            compression="ZSTD",
+                            # compression_level=6,
                         )
                     save_stop = timer()
                     save_time = save_stop - save_start

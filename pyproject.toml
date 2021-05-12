@@ -24,6 +24,7 @@ dask = "^2021.4.1"
 modin = "^0.9.1"
 distributed = "^2021.4.1"
 s3fs = "^2021.4.0"
+ray = "^1.3.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

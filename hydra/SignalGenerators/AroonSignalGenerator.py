@@ -21,28 +21,41 @@ name = "Aroon"
 
 
 @njit
-def aroon_entry(from_i, to_i, col, a, entry, temp_idx_arr):
+def aroon_entry(from_i, to_i, col, a, entry_threshold, temp_idx_arr):
+    # if first time being called
     if from_i == 0:
-        w = np.where(a[:, col] > entry)[0]
+        # build an array of the indices where the arron oscillation > entry_threshold
+        w = np.where(a[:, col] > entry_threshold)[0]
+        # save the array to temp_idx_arr
         for i, num in enumerate(w):
             temp_idx_arr[i] = num
 
+    # for each potential index where aroon oscillation > entry threshold
     for i in range(len(temp_idx_arr)):
+        # if the index is after the last exit (and before whatever to_i is (the next entry?? End of line??))
         if temp_idx_arr[i] > from_i and temp_idx_arr[i] < to_i:
+            # return the index of the next entry
             return temp_idx_arr[i : i + 1]
+    # return empty array
     return temp_idx_arr[:0]
 
 
 @njit
-def aroon_exit(from_i, to_i, col, a, exit, temp_idx_arr):
+def aroon_exit(from_i, to_i, col, a, exit_threshold, temp_idx_arr):
+    # If it is the first time calling this function
     if temp_idx_arr[-1] != 42:
+        # set our 'flag' saying we've called this before
         temp_idx_arr[-1] = 42
-        w = np.where(a[:, col] < exit)[0]
+        # get all indices where the aroonoscillation < exit_threshold
+        w = np.where(a[:, col] < exit_threshold)[0]
+        # save all these indices to temp_idx_arr
         for i, num in enumerate(w):
             temp_idx_arr[i] = num
-
+    # for each index
     for i in range(len(temp_idx_arr)):
+        # if the index is after the last entry and before `to_i` (end of the simulation??)
         if temp_idx_arr[i] > from_i and temp_idx_arr[i] < to_i:
+            # return the index for the next exit
             return temp_idx_arr[i : i + 1]
     return temp_idx_arr[:0]
 

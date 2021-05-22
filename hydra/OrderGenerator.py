@@ -1,13 +1,21 @@
-import os
 from datetime import datetime
 from hydra.utils import now, printd, timeme
 import pathlib
-from typing import Dict, List, NamedTuple, Set, Tuple, TypeVar, Union
+from typing import Dict, List, NamedTuple, Set, Tuple, TypeVar
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from tqdm import tqdm
-import numpy as np
+from numba import njit
+
+current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
+pair = "XBTUSD"
+startDate = "2017-05-15"
+endDate = "2021-06-16"
+reference_time = "2021-05-20T1919"
+fee = 0.001
+buy_fee = 1 + fee
+sell_fee = 1 - fee
 
 
 def load_output_signal(output_dir, reference_time, file) -> pd.DataFrame:
@@ -26,6 +34,11 @@ class SellOrder(NamedTuple):
     simulation_id: int
     trigger_price: float
     profit: float
+
+
+@njit(fastmath=True)
+def calculate_profit(buy_fee, sell_fee, buy_price, sell_price):
+    return (sell_price * sell_fee) / (buy_price * buy_fee)
 
 
 class Simulation:
@@ -50,7 +63,9 @@ class Simulation:
         return self.id == o.id
 
     def get_profit(self, sell_trigger_price):
-        return sell_trigger_price / self.buy_trigger_price
+        return calculate_profit(
+            buy_fee, sell_fee, self.buy_trigger_price, sell_trigger_price
+        )
 
 
 class SimulationEncyclopedia:
@@ -122,8 +137,6 @@ def main(pair, startDate, endDate, reference_time):
     sell_saver = OrderSaver("sell")
 
     printd("Preparing to loop-de-loop and pull")
-    last_entry_day = None
-    last_exit_day = None
 
     total_ticks = pd.to_datetime(endDate) - pd.to_datetime(startDate)
     total_ticks = total_ticks.total_seconds() / 60
@@ -132,6 +145,8 @@ def main(pair, startDate, endDate, reference_time):
         exits = exits.__iter__()
         next_entry_timestamp, next_entry_df = next(entries)
         next_exit_timestamp, next_exit_df = next(exits)
+        last_entry_timestamp = next_entry_timestamp
+        last_exit_timestamp = next_exit_timestamp
         # pbar.update(2)
         start_time = next_entry_timestamp
         counter = 0
@@ -150,31 +165,23 @@ def main(pair, startDate, endDate, reference_time):
             # brotli2 / 750 counts: 15:26
             # brotli2 / 1440 counts: 15:04
 
-            if next_entry_timestamp < pd.to_datetime("2017-05-15 23:30"):
-                continue
             # If exits finish abort
-            if next_exit_timestamp is None or next_entry_timestamp > pd.to_datetime(
-                "2017-05-16 00:30"
-            ):
+            if next_exit_timestamp is None:
                 break
             elif next_entry_timestamp == next_exit_timestamp:
                 # pbar.write(f"[{now()}] Tiedstamp")
                 next_entry_timestamp, next_entry_df = next(entries, (None, None))
                 next_exit_timestamp, next_exit_df = next(exits, (None, None))
 
-                last_entry_day = save_orders(
+                last_entry_timestamp = buy_saver.save_orders(
                     orders,
-                    buy_saver,
-                    "buys",
-                    last_entry_day,
+                    last_entry_timestamp,
                     next_entry_timestamp,
                     pbar,
                 )
-                last_exit_day = save_orders(
+                last_exit_timestamp = sell_saver.save_orders(
                     orders,
-                    sell_saver,
-                    "sells",
-                    last_exit_day,
+                    last_exit_timestamp,
                     next_exit_timestamp,
                     pbar,
                 )
@@ -195,11 +202,9 @@ def main(pair, startDate, endDate, reference_time):
                 # pbar.write(f"[{now()}] Lagging Entry")
                 next_entry_timestamp, next_entry_df = next(entries, (None, None))
 
-                last_entry_day = save_orders(
+                last_entry_timestamp = buy_saver.save_orders(
                     orders,
-                    buy_saver,
-                    "buys",
-                    last_entry_day,
+                    last_entry_timestamp,
                     next_entry_timestamp,
                     pbar,
                 )
@@ -216,11 +221,9 @@ def main(pair, startDate, endDate, reference_time):
                 # pbar.write(f"[{now()}] Lagging Exit")
                 next_exit_timestamp, next_exit_df = next(exits, (None, None))
 
-                last_exit_day = save_orders(
+                last_exit_timestamp = sell_saver.save_orders(
                     orders,
-                    sell_saver,
-                    "sells",
-                    last_exit_day,
+                    last_exit_timestamp,
                     next_exit_timestamp,
                     pbar,
                 )
@@ -229,23 +232,6 @@ def main(pair, startDate, endDate, reference_time):
                 # pbar.write(f"[{now()}] Updating Simulations")
                 encyclopedia.update_sells(sells)
                 orders["sell"] += sells
-
-
-def save_orders(orders, saver, key, last_day, next_timestamp, pbar):
-    if (
-        last_day is None
-        or last_day != next_timestamp.day
-        # or counter % 360 == 0
-    ):
-        pbar.write(f"Saving {key}")
-        saver.save_orders(
-            f"day={last_day}",
-            next_timestamp,
-            orders[key],
-        )
-        last_day = next_timestamp.day
-        orders[key] = []
-    return last_day
 
 
 class OrderSaver:
@@ -258,15 +244,26 @@ class OrderSaver:
         self.lastname = None
         self.writer = None
 
-    def save_orders(self, filename, timestamp, orders):
-        if not len(orders):
-            return
-        order_df = pd.DataFrame.from_records(orders, columns=self.columns)
+    def save_orders(self, orders, last_timestamp, next_timestamp, pbar):
+        if (
+            last_timestamp.day == next_timestamp.day
+            or len(orders[self.type]) == 0
+            # or counter % 360 == 0
+        ):
+            return last_timestamp
+
+        pbar.set_description(f"[{now()}] Saving {last_timestamp.date()}")
+
+        filename = f"day={last_timestamp.day}"
+        order_df = pd.DataFrame.from_records(orders[self.type], columns=self.columns)
         table = pa.Table.from_pandas(order_df)
 
-        path = pathlib.Path(
-            f"F:/hydra/orders-fixd/year={timestamp.year}/month={timestamp.month}"
+        path = (
+            pathlib.Path(f"F:/hydra/orders {current_time} fee={fee}/")
+            / f"year={last_timestamp.year}"
+            / f"month={last_timestamp.month}"
         )
+
         if not path.exists():
             path.mkdir(parents=True)
 
@@ -282,6 +279,9 @@ class OrderSaver:
             )
 
         self.writer.write_table(table)
+        last_timestamp = next_timestamp
+        orders[self.type] = []
+        return last_timestamp
 
 
 idx = pd.IndexSlice
@@ -335,9 +335,4 @@ def filter_orders(buys, sells) -> Tuple[List[BuyOrder], List[SellOrder]]:
     ]
 
 
-pair = "XBTUSD"
-startDate = "2017-05-15"
-endDate = "2021-06-16"
-reference_time = "2021-05-20T1919"
 main(pair, startDate, endDate, reference_time)
-# groupless(pair, startDate, endDate, reference_time)

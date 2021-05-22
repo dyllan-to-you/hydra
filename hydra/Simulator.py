@@ -1,5 +1,8 @@
+import copy
 import platform
 import pathlib
+from datetime import datetime
+from typing import Dict, Set
 import pandas as pd
 import numpy as np
 import pyarrow as pa
@@ -37,62 +40,70 @@ def datetime_range(start, end, delta, inclusive=False):
         yield current
 
 
-decays = {
-    60: 0.05 ** (1 / 60),
-    180: 0.05 ** (1 / 180),
-    360: 0.05 ** (1 / 360),
-    720: 0.05 ** (1 / 720),
-    1440: 0.05 ** (1 / 1440),
-    10080: 0.05 ** (1 / 10080),
-    40320: 0.05 ** (1 / 40320),
-    525600: 0.05 ** (1 / 525600),
-}
-
-
-@njit
-def get_decay(original, profit, rate, minutes_elapsed=1):
+@njit(cache=True)
+def get_decay(original, rate, profit, minutes_elapsed=1):
     return ((original * profit - 1) * (rate ** minutes_elapsed)) + 1
 
 
-def add_sim_profit(sim, current_time):
-    sim["total_profit"] *= sim["profit"]
-    decay_keys = {
-        "decay_60": 60,
-        "decay_180": 180,
-        "decay_360": 360,
-        "decay_720": 720,
-        "decay_1440": 1440,
-        "decay_10080": 10080,
-        "decay_40320": 40320,
-        "decay_525600": 525600,
-    }
-    elapsed = (current_time - sim["last_decay"]) / np.timedelta64(1, "m")
-    for decay, interval in decay_keys.items():
-        sim[decay] = get_decay(
-            sim[decay].to_numpy(),
-            sim["profit"].to_numpy(),
-            decays[interval],
-            elapsed.to_numpy(),
+decay_rates = np.array(
+    [
+        0.05 ** (1 / 60),
+        0.05 ** (1 / 180),
+        0.05 ** (1 / 360),
+        0.05 ** (1 / 720),
+        0.05 ** (1 / 1440),
+        0.05 ** (1 / 10080),
+        0.05 ** (1 / 40320),
+        0.05 ** (1 / 525600),
+    ]
+)
+
+
+class Simulation:
+    id: int
+    total_profit: float
+    decays: Dict[str, int]
+    last_decay: int
+
+    def __init__(self, id, last_decay):
+        self.id = id
+        self.last_decay = last_decay
+        self.total_profit = 1
+        self.decays = np.array([1, 1, 1, 1, 1, 1, 1, 1], dtype=np.float32)
+
+    def __hash__(self) -> int:
+        return self.id
+
+    def __eq__(self, o: object) -> bool:
+        return self.id == o.id
+
+    def add_profit(self, profit, current_time):
+        # self.total_profit *= profit
+        elapsed = current_time - self.last_decay
+        # for rate, val in self.decays.items():
+        self.decays = get_decay(
+            self.decays,
+            decay_rates,
+            profit,
+            elapsed,
         )
-    sim["last_decay"] = current_time
-    return sim
+        self.last_decay = current_time
 
 
-def add_sim_profit_orig(sim, profit, minutes_elapsed=1):
-    sim["total_profit"] *= profit
-    decay_keys = {
-        "decay_60": 60,
-        "decay_180": 180,
-        "decay_360": 360,
-        "decay_720": 720,
-        "decay_1440": 1440,
-        "decay_10080": 10080,
-        "decay_40320": 40320,
-        "decay_525600": 525600,
-    }
-    for decay, interval in decay_keys.items():
-        sim[decay] = get_decay(sim[decay], profit, decays[interval])
-    return sim
+class SimulationEncyclopedia:
+    simulations: Dict[int, Simulation]
+
+    def __init__(self, simulations: int, initial_decay_time):
+        ids = range(simulations)
+        self.simulations = dict.fromkeys(set(ids))
+        for id in ids:
+            self.simulations[id] = Simulation(id, initial_decay_time)
+
+    def add_profits(self, sells, current_time):
+        for sell in sells:
+            index, timestamp, simulation_id, profit = sell
+            sim = self.simulations.get(simulation_id)
+            sim.add_profit(profit, current_time)
 
 
 @timeme
@@ -110,33 +121,14 @@ def main(pair, startDate, endDate, aroon_reference):
         output_dir / "signals", f"{aroon_reference} - aroon_exits.ids"
     )
 
-    # buy_filename = f"day={startDate.day}.buy"
-    # buys = load_output_signal(order_dir, buy_filename)
+    printd("Initializing Simulations")
+    encyclopedia = SimulationEncyclopedia(len(entry_ids) * len(exit_ids), 0)
 
-    simulations_df = pd.DataFrame(
-        index=pd.MultiIndex.from_product(
-            [entry_ids["id"], exit_ids["id"]], names=["entry_id", "exit_id"]
-        )
-    )
-    simulations_df = simulations_df.reset_index().drop(["entry_id", "exit_id"], axis=1)
-    simulations_df.index.name = "id"
-    simulations_df["total_profit"] = 1
-    simulations_df["decay_60"] = 1
-    simulations_df["decay_180"] = 1
-    simulations_df["decay_360"] = 1
-    simulations_df["decay_720"] = 1
-    simulations_df["decay_1440"] = 1
-    simulations_df["decay_10080"] = 1
-    simulations_df["decay_40320"] = 1
-    simulations_df["decay_525600"] = 1
-    simulations_df["last_decay"] = startDate
-    print(simulations_df)
-
-    printd("Preparing to loop-de-loop and pull")
+    printd("Preparing to simp-de-sim and pull")
     total_ticks = pd.to_datetime(endDate) - pd.to_datetime(startDate)
     total_ticks = total_ticks.total_seconds() / 60
     with tqdm(total=total_ticks, unit="tick", smoothing=0) as pbar:
-        # counter = 0
+        counter = 0
         for current_day in datetime_range(startDate, endDate, pd.Timedelta(1, "day")):
             try:
                 sell_day = load_parquet_by_date(
@@ -159,19 +151,15 @@ def main(pair, startDate, endDate, aroon_reference):
                 pd.Timedelta(1, "minute"),
             ):
                 pbar.update(1)
-                # if counter % 10 == 0:
-                # counter += 1
+                counter += 1
+                if counter % 1440 == 0:
+                    return
 
                 if current_minute < current_sell_date:
                     continue
                 pbar.set_description(f"Sell Length {len(current_sell_df)}")
-                current_sell_df = current_sell_df.set_index("simulation_id")
-                current_sell_df = current_sell_df.join(simulations_df, how="left")
+                encyclopedia.add_profits(current_sell_df.itertuples(name=None), counter)
 
-                current_sell_df = add_sim_profit(current_sell_df, current_minute)
-                simulations_df.update(current_sell_df)
-                print(simulations_df)
-                return
                 current_sell_date, current_sell_df = next(sells)
 
 

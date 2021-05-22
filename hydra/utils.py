@@ -82,7 +82,9 @@ def timeme(fn):
         te = timer()
 
         elapsed = te - ts
-        # print("func:%r args:[%r, %r] took: %2.4f sec" % (f.__name__, args, kw, te - ts))
+        # print(
+        #     "func:%r args:[%r, %r] took: %2.4f sec" % (fn.__name__, args, kw, elapsed)
+        # )
         printd("func:%r took: %2.4f sec" % (fn.__name__, elapsed))
         return result
 

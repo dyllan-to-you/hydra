@@ -1,270 +1,343 @@
-import gc
-from timeit import default_timer as timer
-from tqdm.std import tqdm
-from hydra.SimManager import load_prices, get_simulation_id
-from math import floor
-from hydra.utils import get_mem, now, printd, timeme, write
-import sqlite3
+import os
+from datetime import datetime
+from hydra.utils import now, printd, timeme
+import pathlib
+from typing import Dict, List, NamedTuple, Set, Tuple, TypeVar, Union
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pprint
+from tqdm import tqdm
+import numpy as np
 
-import pandas as pd
 
-# from distributed import Client
+def load_output_signal(output_dir, reference_time, file) -> pd.DataFrame:
+    path = output_dir / "signals" / f"{reference_time} - {file}.parquet"
+    return pq.read_table(path).to_pandas()
 
-# if __name__ == "__main__":
-#     client = Client(memory_limit="8G")
-# import modin.pandas as pd
 
-pp = pprint.PrettyPrinter(indent=2)
-MAX_MEMORY = 1 * 1024 ** 3
-MAX_MEMORY_MB = MAX_MEMORY / 1024 ** 2
-last_entry = None
-last_exit = None
+class BuyOrder(NamedTuple):
+    timestamp: datetime
+    simulation_id: int
+    trigger_price: float  # open if aroon is -1 else associated trigger price
+
+
+class SellOrder(NamedTuple):
+    timestamp: datetime
+    simulation_id: int
+    trigger_price: float
+    profit: float
+
+
+class Simulation:
+    id: int
+    entry_id: int
+    exit_id: int
+    open_position: bool
+    buy_trigger_price: float
+
+    def __init__(self, id, entry_id, exit_id):
+        self.id = id
+        self.entry_id = entry_id
+        self.exit_id = exit_id
+        self.open_position = False
+        self.buy_trigger_price = None
+        pass
+
+    def __hash__(self) -> int:
+        return self.id
+
+    def __eq__(self, o: object) -> bool:
+        return self.id == o.id
+
+    def get_profit(self, sell_trigger_price):
+        return sell_trigger_price / self.buy_trigger_price
+
+
+class SimulationEncyclopedia:
+    simulations: Dict[int, Simulation]
+    by_entry: Dict[int, Set[Simulation]]
+    by_exit: Dict[int, Set[Simulation]]
+
+    def __init__(self, simulations: Dict[int, Dict]):
+        self.by_entry = {}  # dict.fromkeys(set(entries))
+        self.by_exit = {}  # dict.fromkeys(set(exits))
+        self.simulations = dict.fromkeys(set(simulations.keys()))
+        for id, val in simulations.items():
+            sim = Simulation(id, val["entry_id"], val["exit_id"])
+            self.simulations[id] = sim
+            self.by_entry.setdefault(val["entry_id"], set()).add(sim)
+            self.by_exit.setdefault(val["exit_id"], set()).add(sim)
+
+    def update_buys(self, buys: List[BuyOrder]):
+        for timestamp, simId, trigger in buys:
+            sim = self.simulations.get(simId)
+            sim.open_position = True
+            sim.buy_trigger_price = trigger
+
+    def update_sells(self, sells: List[SellOrder]):
+        for timestamp, simId, trigger, profit in sells:
+            sim = self.simulations.get(simId)
+            sim.open_position = False
+            sim.buy_trigger_price = None
 
 
 @timeme
-def gen_parq(conn, table):
-    df = pd.read_sql(
-        f"SELECT id, timestamp from {table}",
-        conn,
-        parse_dates="timestamp",
+def main(pair, startDate, endDate, reference_time):
+    printd("Loading Ids")
+    output_dir = pathlib.Path.cwd().joinpath("output", pair)
+    entry_ids = load_output_signal(output_dir, reference_time, "aroon_entries.ids")
+    exit_ids = load_output_signal(output_dir, reference_time, "aroon_exits.ids")
+
+    printd("Preparing Simulations")
+    simulations_df = pd.DataFrame(
+        index=pd.MultiIndex.from_product(
+            [entry_ids["id"], exit_ids["id"]], names=["entry_id", "exit_id"]
+        )
     )
+    simulations_df = simulations_df.reset_index()
+    simulations_dick = simulations_df.to_dict("index")
 
-    df["id"] = df["id"].astype("uint16")
-    df.to_parquet(f"{table}.ts.parquet", index=False)
+    printd("Initializing Simulations")
+    encyclopedia = SimulationEncyclopedia(simulations_dick)
+    del simulations_df
+    del simulations_dick
+    print(encyclopedia.simulations.get(0))
+    printd("Loading Entries")
+    entries = (
+        load_output_signal(output_dir, reference_time, "aroon_entries")
+        # .set_index("timestamp", "id")
+    )
+    entries = entries.groupby("timestamp")
 
+    printd("Loading Exits")
+    exits = (
+        load_output_signal(output_dir, reference_time, "aroon_exits")
+        # .set_index("timestamp", "id")
+    )
+    exits = exits.groupby("timestamp")
 
-# @timeme
-# def dask_main(db=None):
-#     entries = dd.read_parquet("aroon_entry.parquet")
+    orders = {"buy": [], "sell": []}
 
-#     entries_sparse = sparse.COO([entries.iloc[:, 0], entries.iloc[:, 1]], 1)
-#     entries_da = da.from_array(entries_sparse, asarray=False)
-#     entries_da.compute()
-# exits = dd.read_parquet("aroon_exit.parquet")
-# df.set_index("id")
-# printd(entries_df)
+    buy_saver = OrderSaver("buy")
+    sell_saver = OrderSaver("sell")
 
-# printd(entries_da[:5, :5])
+    printd("Preparing to loop-de-loop and pull")
+    last_entry_day = None
+    last_exit_day = None
 
+    total_ticks = pd.to_datetime(endDate) - pd.to_datetime(startDate)
+    total_ticks = total_ticks.total_seconds() / 60
+    with tqdm(total=total_ticks, unit="tick", smoothing=0) as pbar:
+        entries = entries.__iter__()
+        exits = exits.__iter__()
+        next_entry_timestamp, next_entry_df = next(entries)
+        next_exit_timestamp, next_exit_df = next(exits)
+        # pbar.update(2)
+        start_time = next_entry_timestamp
+        counter = 0
+        while True:
+            # pbar.write(f"{next_entry_timestamp}, {next_exit_timestamp}")
 
-def crossings_nonzero_pos2neg(data):
-    pos = data > 0
-    return (pos[:-1] & ~pos[1:]).nonzero()[0] + 1
+            if counter % 10 == 0:
+                next_time = next_entry_timestamp
+                pbar.update((next_time - start_time).total_seconds() / 60)
+                start_time = next_time
+            counter += 1
+            # snappy: 15:07
+            # brotli2 / 10 counts: 15:37 (half the space)
+            # brotli2 / 100 counts: 15:08
+            # brotli2 / 360 counts: 15:06
+            # brotli2 / 750 counts: 15:26
+            # brotli2 / 1440 counts: 15:04
 
-
-def crossings_nonzero_neg2pos(data):
-    pos = data > 0
-    return (~pos[:-1] & pos[1:]).nonzero()[0] + 1
-
-
-def partition_filename(prefix="", suffix=""):
-    def fn(keys):
-        return f"{prefix}{'-'.join([str(k) for k in keys])}{suffix}.parquet"
-
-    return fn
-
-
-@timeme
-def main(last_entry=None, last_exit=None, skip_save=False):
-    if last_entry is None:
-        last_entry = 0
-    entries_df = pd.read_parquet("aroon_entry.parquet")
-    exits_df = pd.read_parquet("aroon_exit.parquet")
-
-    entries_df["timestamp"] = pd.to_datetime(entries_df["timestamp"], unit="s")
-    exits_df["timestamp"] = pd.to_datetime(exits_df["timestamp"], unit="s")
-    entries_df = entries_df.assign(val=1)
-    exits_df = exits_df.assign(val=-1)
-    entries_df = entries_df.set_index(["id", "timestamp"])
-    exits_df = exits_df.set_index(["id", "timestamp"])
-    # print(entries_df, exits_df)
-
-    entry_ids = entries_df.index.unique(level=0)
-    exit_ids = exits_df.index.unique(level=0)
-
-    prices = load_prices("XBTUSD", "../data/kraken")[["open"]]
-    prices["open"] = prices["open"].astype("float32")
-    id_base = max(len(entry_ids), len(exit_ids))
-    saves = 0
-    acc = {"buys": [], "sells": [], "mem": 0}
-    gc.collect()
-    ts = timer()
-    with tqdm(total=(len(entry_ids) - last_entry) * len(exit_ids)) as pbar:
-        for entry_idx, (entry_id, entries) in enumerate(
-            tqdm(entries_df.groupby(level=0))
-        ):
-            if entry_idx < last_entry:
-                pbar.set_description(f"Skipping Entries {entry_idx}/{last_entry-1}")
+            if next_entry_timestamp < pd.to_datetime("2017-05-15 23:30"):
                 continue
-            entries = entries.reset_index(level=0, drop=True)
-            # entries = entries_df.loc[entry, :]
-            # entries = entries_df.loc[entries_df["id"] == entry]
-            # entries = entries.set_index("timestamp").drop("id", axis=1)
-            for exit_idx, (exit_id, exits) in enumerate(
-                tqdm(exits_df.groupby(level=0), leave=False)
+            # If exits finish abort
+            if next_exit_timestamp is None or next_entry_timestamp > pd.to_datetime(
+                "2017-05-16 00:30"
             ):
-                if (
-                    last_exit is not None
-                    and entry_idx == last_entry
-                    and exit_idx <= last_exit
-                ):
-                    pbar.update(1)
-                    pbar.set_description(
-                        f"Skipping Exits {exit_idx}/{last_exit} for entry {last_entry}"
-                    )
-                    continue
-                if len(acc["buys"]) % 25 == 0:
-                    pbar.set_description(
-                        f"""{saves=} {len(acc["buys"])=} mem={acc["mem"]/1024**2:.2f}/{
-                            MAX_MEMORY_MB}"""
-                    )
+                break
+            elif next_entry_timestamp == next_exit_timestamp:
+                # pbar.write(f"[{now()}] Tiedstamp")
+                next_entry_timestamp, next_entry_df = next(entries, (None, None))
+                next_exit_timestamp, next_exit_df = next(exits, (None, None))
 
-                # if entry_idx == 181 and exit_idx == 403:
-                #     return
-
-                simulation_id = get_simulation_id(id_base, entry_id, exit_id)
-                exits = exits.reset_index(level=0, drop=True)
-                # exits = exits_df.loc[exit, :]
-                # exits = exits_df.loc[exits_df["id"] == exit]
-                # exits = exits.set_index("timestamp").drop("id", axis=1)
-                orders = exits.join(entries, how="outer", lsuffix="ex")
-                orders = orders.val.fillna(0) + orders.valex.fillna(0)
-                buys_idx = crossings_nonzero_neg2pos(orders.to_numpy())
-                sells_idx = crossings_nonzero_pos2neg(orders.to_numpy())
-
-                if len(buys_idx) == 0 or len(sells_idx) == 0:
-                    continue
-                buys = prices.loc[orders.iloc[buys_idx].index]
-                sells = prices.loc[orders.iloc[sells_idx].index]
-                try:
-                    if buys.index[0] > sells.index[0]:
-                        sells = sells.iloc[1:]
-                    if len(sells) == 0:
-                        continue
-                    if buys.index[-1] > sells.index[-1]:
-                        buys = buys.iloc[:-1]
-                    if len(buys) == 0:
-                        continue
-                    if len(buys) != len(sells):
-                        raise Exception("ohgodwhyplease")
-                except Exception as e:
-                    pbar.write(f"O Buy: {prices.loc[orders.iloc[buys_idx].index]}")
-                    pbar.write(f"O Sell: {prices.loc[orders.iloc[sells_idx].index]}")
-                    pbar.write(f"Buy {buys}")
-                    pbar.write(f"Sells {sells}")
-                    raise e
-
-                buys = buys.reset_index()
-                sells = sells.reset_index()
-
-                trades = buys.join(sells, lsuffix="_buy", rsuffix="_sell")
-                sells["profit_open"] = trades["open_sell"] / trades["open_buy"]
-
-                buys["year"] = buys["timestamp"].dt.year.astype("uint16")
-                buys["month"] = buys["timestamp"].dt.month.astype("uint8")
-                buys["day"] = buys["timestamp"].dt.day.astype("uint8")
-                buys["simulation"] = simulation_id
-                buys["simulation"] = buys["simulation"].astype("uint32")
-                buys = buys.drop(columns=["open"])
-
-                sells["year"] = sells["timestamp"].dt.year.astype("uint16")
-                sells["month"] = sells["timestamp"].dt.month.astype("uint8")
-                sells["day"] = sells["timestamp"].dt.day.astype("uint8")
-                sells["simulation"] = simulation_id
-                sells["simulation"] = sells["simulation"].astype("uint32")
-                sells = sells.drop(columns=["open"])
-
-                acc["buys"].append(buys)
-                acc["sells"].append(sells)
-                acc["mem"] += (
-                    buys.memory_usage(index=True).sum()
-                    + sells.memory_usage(index=True).sum()
+                last_entry_day = save_orders(
+                    orders,
+                    buy_saver,
+                    "buys",
+                    last_entry_day,
+                    next_entry_timestamp,
+                    pbar,
                 )
-                # acc["mem"] = get_mem()
+                last_exit_day = save_orders(
+                    orders,
+                    sell_saver,
+                    "sells",
+                    last_exit_day,
+                    next_exit_timestamp,
+                    pbar,
+                )
 
-                if acc["mem"] >= MAX_MEMORY:
-                    pbar.set_description(
-                        f"{saves=} {len(acc['buys'])=} "
-                        f"mem={acc['mem'] / 1024**2:.2f}/{MAX_MEMORY_MB}MB [SAVING]"
-                    )
-                    save_start = timer()
-                    if not skip_save:
-                        # Buys
-                        pq.write_to_dataset(
-                            pa.Table.from_pandas(
-                                pd.concat(acc["buys"]),
-                                columns=[
-                                    "timestamp",
-                                    "simulation",
-                                    "year",
-                                    "month",
-                                    "day",
-                                ],
-                                preserve_index=False,
-                            ),
-                            root_path="F:/hydra/orders",
-                            partition_cols=["year", "month", "day"],
-                            partition_filename_cb=partition_filename(suffix=".buys"),
-                            compression="ZSTD",
-                            # compression_level=6,
-                        )
+                # pbar.write(f"[{now()}] Creating Orders")
+                sells = create_orders(encyclopedia, next_exit_df, True)
+                buys = create_orders(encyclopedia, next_entry_df, False)
 
-                        # Sells
-                        pq.write_to_dataset(
-                            pa.Table.from_pandas(
-                                pd.concat(acc["sells"]),
-                                columns=[
-                                    "timestamp",
-                                    "simulation",
-                                    "profit_open",
-                                    "year",
-                                    "month",
-                                    "day",
-                                ],
-                            ),
-                            root_path="F:/hydra/orders",
-                            partition_cols=["year", "month", "day"],
-                            partition_filename_cb=partition_filename(suffix=".sells"),
-                            compression="ZSTD",
-                            # compression_level=6,
-                        )
-                    save_stop = timer()
-                    save_time = save_stop - save_start
+                # pbar.write(f"[{now()}] Filtering Orders")
+                buys, sells = filter_orders(buys, sells)
 
-                    te = timer()
-                    elapsed = te - ts
-                    ts = timer()
+                # pbar.write(f"[{now()}] Updating Simulations")
+                encyclopedia.update_buys(buys)
+                orders["buy"] += buys
+                encyclopedia.update_sells(sells)
+                orders["sell"] += sells
+            elif next_entry_timestamp < next_exit_timestamp:
+                # pbar.write(f"[{now()}] Lagging Entry")
+                next_entry_timestamp, next_entry_df = next(entries, (None, None))
 
-                    write(
-                        f"{entry_idx=} {exit_idx=} {simulation_id=}",
-                        "Saved Orders.txt",
-                    )
-                    pbar.write(
-                        f"[{now()}] {entry_idx=} {exit_idx=} {simulation_id=} "
-                        f"SaveTime={save_time:2.4f}s Elapsed={elapsed:2.4f}s "
-                        f"{len(acc['buys'])=}"
-                    )
+                last_entry_day = save_orders(
+                    orders,
+                    buy_saver,
+                    "buys",
+                    last_entry_day,
+                    next_entry_timestamp,
+                    pbar,
+                )
+                # pbar.write(f"[{now()}] Creating Orders")
+                buys = create_orders(encyclopedia, next_entry_df, False)
+                # pbar.write(f"[{now()}] Updating Simulations")
+                encyclopedia.update_buys(buys)
+                orders["buy"] += buys
+            # if entries finish before exits, keep doing exits
+            elif (
+                next_entry_timestamp is None
+                or next_exit_timestamp < next_entry_timestamp
+            ):
+                # pbar.write(f"[{now()}] Lagging Exit")
+                next_exit_timestamp, next_exit_df = next(exits, (None, None))
 
-                    last_entry = entry_idx
-                    last_exit = exit_idx
-                    acc = {"buys": [], "sells": [], "mem": 0}
-                    saves += 1
-                pbar.update(1)
+                last_exit_day = save_orders(
+                    orders,
+                    sell_saver,
+                    "sells",
+                    last_exit_day,
+                    next_exit_timestamp,
+                    pbar,
+                )
+                # pbar.write(f"[{now()}] Creating Orders")
+                sells = create_orders(encyclopedia, next_exit_df, True)
+                # pbar.write(f"[{now()}] Updating Simulations")
+                encyclopedia.update_sells(sells)
+                orders["sell"] += sells
 
 
-if __name__ == "__main__":
-    try:
-        # conn = sqlite3.connect(
-        #     database="output/signals/XBTUSD Aroon 2021-04-16T2204.db"
-        # )
-        # cur = conn.cursor()
-        # gen_parq(conn, "aroon_entry")
-        # gen_parq(conn, "aroon_exit")
-        main(last_entry=last_entry, last_exit=last_exit)
-    except KeyboardInterrupt as e:
-        print("KeyboardInterrupt", e)
-    # finally:
-    #     conn.close()
+def save_orders(orders, saver, key, last_day, next_timestamp, pbar):
+    if (
+        last_day is None
+        or last_day != next_timestamp.day
+        # or counter % 360 == 0
+    ):
+        pbar.write(f"Saving {key}")
+        saver.save_orders(
+            f"day={last_day}",
+            next_timestamp,
+            orders[key],
+        )
+        last_day = next_timestamp.day
+        orders[key] = []
+    return last_day
+
+
+class OrderSaver:
+    type: str
+    columns: List[str]
+
+    def __init__(self, type):
+        self.type = type
+        self.columns = BuyOrder._fields if type == "buy" else SellOrder._fields
+        self.lastname = None
+        self.writer = None
+
+    def save_orders(self, filename, timestamp, orders):
+        if not len(orders):
+            return
+        order_df = pd.DataFrame.from_records(orders, columns=self.columns)
+        table = pa.Table.from_pandas(order_df)
+
+        path = pathlib.Path(
+            f"F:/hydra/orders-fixd/year={timestamp.year}/month={timestamp.month}"
+        )
+        if not path.exists():
+            path.mkdir(parents=True)
+
+        if self.lastname is None or filename != self.lastname:
+            if self.writer is not None:
+                self.writer.close()
+            self.lastname = filename
+            self.writer = pq.ParquetWriter(
+                path / f"{filename}.{self.type}.parquet",
+                table.schema,
+                compression="brotli",
+                compression_level=2,
+            )
+
+        self.writer.write_table(table)
+
+
+idx = pd.IndexSlice
+
+
+def flatten(object):
+    for item in object:
+        if isinstance(item, (list, tuple, set)):
+            yield from flatten(item)
+        else:
+            yield item
+
+
+def create_orders(
+    encyclopedia: SimulationEncyclopedia, indicator_signal, desired_position
+) -> List[TypeVar("Order", BuyOrder, SellOrder)]:
+    # printd("Creating order", desired_position)
+    indicator_signal = indicator_signal.loc[indicator_signal["trigger"] != 0]
+    # printd("Signal Indicated")
+
+    # Exit
+    if desired_position:
+        level = "exit_id"
+        orders = [
+            SellOrder(timestamp, sim.id, trigger, sim.get_profit(trigger))
+            for idx, timestamp, trigger, id in indicator_signal.itertuples()
+            for sim in encyclopedia.by_exit.get(id)
+            if sim.open_position == desired_position
+        ]
+    # Entry
+    else:
+        level = "entry_id"
+        orders = [
+            BuyOrder(timestamp, sim.id, trigger)
+            for idx, timestamp, trigger, id in indicator_signal.itertuples()
+            for sim in encyclopedia.by_entry.get(id)
+            if sim.open_position == desired_position
+        ]
+    # printd("Simulations Found")
+    # printd("Simulating Desire")
+    return orders
+
+
+def filter_orders(buys, sells) -> Tuple[List[BuyOrder], List[SellOrder]]:
+    buysims = {simId for timestamp, simId, trigger in buys}
+    sellsims = {simId for timestamp, simId, trigger, profit in sells}
+    both = buysims & sellsims
+
+    return [buy for buy in buys if buy[1] not in both], [
+        sell for sell in sells if sell[1] not in both
+    ]
+
+
+pair = "XBTUSD"
+startDate = "2017-05-15"
+endDate = "2021-06-16"
+reference_time = "2021-05-20T1919"
+main(pair, startDate, endDate, reference_time)
+# groupless(pair, startDate, endDate, reference_time)

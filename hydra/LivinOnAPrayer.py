@@ -222,6 +222,7 @@ def loop(db: sqlite3.Cursor, window=60, fee=0, save=False, **kwargs):
             total=len(prices.index),
             leave=True,
             unit="tick",
+            smoothing=0,
         ):
             profit = tick(
                 ctx,

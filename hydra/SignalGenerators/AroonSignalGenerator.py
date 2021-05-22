@@ -1,3 +1,4 @@
+from tqdm.std import tqdm
 import math
 import sqlite3
 import pathlib
@@ -6,7 +7,7 @@ from numba import njit
 import pandas as pd
 import vectorbt as vbt
 from vectorbt.signals.factory import SignalFactory
-from hydra.SuperSim import load_prices
+from hydra.SimManager import load_prices
 import pyarrow as pa
 import pyarrow.parquet as pq
 from hydra.utils import timeme, now, printd
@@ -15,9 +16,42 @@ from time import time
 from datetime import datetime
 import os, psutil
 import scipy as sp
-
+import sparse
 
 name = "Aroon"
+current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
+
+
+def save_db(conn, df, table, *args, pbar=None, **kwargs):
+    pbar.write(f"[{now()}] Converting dataframe to table: {table}")
+    df.to_sql(f"{table}_df", conn, if_exists="replace", index=False, chunksize=100000)
+    try:
+        db_stmnt = f"INSERT INTO {table} SELECT * FROM {table}_df;"
+        # pbar.write(f"[{now()}] {db_stmnt=}")
+        conn.execute(db_stmnt)
+    except sqlite3.OperationalError as e:
+        if "no such table:" not in str(e):
+            print(e)
+            raise e
+        db_stmnt = f"""
+            CREATE TABLE {table} AS SELECT * FROM {table}_df;
+        """
+        # pbar.write(f"[{now()}] {db_stmnt=}")
+        conn.executescript(db_stmnt)
+
+    pbar.write(f"[{now()}] Committing db changes")
+    conn.commit()
+
+
+def load_multiple_prices(*args):
+    prices = {}
+    prices[1] = load_prices(*args, interval=1)
+    prices[5] = load_prices(*args, interval=5)
+    prices[15] = load_prices(*args, interval=15)
+    prices[60] = load_prices(*args, interval=60)
+    prices[720] = load_prices(*args, interval=720)
+    prices[1440] = load_prices(*args, interval=1440)
+    return prices
 
 
 @njit
@@ -79,6 +113,7 @@ AroonStrategy = SignalFactory(
 )
 
 AROONOSC = vbt.IndicatorFactory.from_talib("AROONOSC")
+AROON = vbt.IndicatorFactory.from_talib("AROON")
 # printd(help(AROONOSC.run))
 
 
@@ -90,6 +125,101 @@ def generate_signals(
     # Run strategy signal generator
     aroon_signals = AroonStrategy.run(aroonosc.real, entry_threshold, exit_threshold)
     return aroon_signals
+
+
+def generate_aroons(
+    prices, timeperiods, interval=1, entry_threshold=50, exit_threshold=-50, **kwargs
+):
+    price = prices[interval]
+    aroons = AROON.run(price["high"], price["low"], timeperiods)
+    extreme_up = aroons.aroonup_above(99.99999)
+    extreme_down = aroons.aroondown_above(99.99999)
+
+    def replace_extremes(is_up=True):
+        def applier(series):
+            period = series.name
+            extreme_times = series.index[series.values == True]
+            if is_up:
+                extreme = price.rolling(window=pd.Timedelta(minutes=period * interval))[
+                    "high"
+                ].max()
+            else:
+                extreme = price.rolling(window=pd.Timedelta(minutes=period * interval))[
+                    "low"
+                ].min()
+            extreme_prices = extreme.loc[extreme_times]
+            df = series.to_frame().join(extreme_prices)
+            return df["high" if is_up else "low"]  # .astype(
+            #     pd.SparseDtype("float"), np.nan
+            # )  # .fillna(0)
+
+        return applier
+
+    extreme_up = extreme_up.apply(replace_extremes(is_up=True))
+    extreme_down = extreme_down.apply(replace_extremes(is_up=False))
+
+    aroonosc = AROONOSC.run(price["high"], price["low"], timeperiods)
+
+    entries1 = (
+        aroonosc.real_above([e - 0.000001 for e in entry_threshold], crossover=True)
+        .astype(int)
+        .replace(0, np.nan)
+    )
+    entries0 = (
+        aroonosc.real_below([e - 0.000001 for e in entry_threshold], crossover=True)
+        .astype(int)
+        .replace(0, np.nan)
+        .replace(1, 0)
+    )
+
+    entries1.columns = entries1.columns.set_levels(entry_threshold, level=0)
+    entries0.columns = entries0.columns.set_levels(entry_threshold, level=0)
+
+    entries = entries1.fillna(entries0)
+
+    exits1 = (
+        aroonosc.real_below([e + 0.000001 for e in exit_threshold], crossover=True)
+        .astype(int)
+        .replace(0, np.nan)
+    )
+    exits0 = (
+        aroonosc.real_above([e + 0.000001 for e in exit_threshold], crossover=True)
+        .astype(int)
+        .replace(0, np.nan)
+        .replace(1, 0)
+    )
+    exits1.columns = exits1.columns.set_levels(exit_threshold, level=0)
+    exits0.columns = exits0.columns.set_levels(exit_threshold, level=0)
+    exits = exits1.fillna(exits0)
+
+    def set_extreme_for_threshold(extreme):
+        def applier(series):
+            threshold, period = series.name
+            crossing_point = series.index[series.values == 1]
+            relevant_extremes = extreme.loc[crossing_point][period]
+            ones = series.loc[series == 1]
+            series.rename("ones&zeroes", inplace=True)
+            df = (
+                series.to_frame()
+                .join(relevant_extremes)
+                .join(price["open"].loc[ones.index])
+            )
+            res = (
+                df[period]
+                .fillna(df["open"])
+                .fillna(series)
+                .astype(pd.SparseDtype("float", np.nan))
+                # .replace(np.nan, -2)
+                # .replace(0, np.nan)
+                # .replace(-2, 0)
+            )
+            return res
+
+        return applier
+
+    entries = entries.apply(set_extreme_for_threshold(extreme_up))
+    exits = exits.apply(set_extreme_for_threshold(extreme_down))
+    return entries, exits, aroonosc.real
 
 
 def save_parquet(dataframe, filepath=None, writer=None):
@@ -111,44 +241,142 @@ def save_parquet(dataframe, filepath=None, writer=None):
     return writer
 
 
-current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
+def aWholeNewMain(pair, price_path, startDate, endDate, batches):
+    printd("Loading Prices")
+    prices = load_multiple_prices(pair, price_path, startDate, endDate)
 
+    output_dir = (
+        pathlib.Path(__file__)
+        .parent.absolute()
+        .joinpath("..", "..", "output", pair, "signals")
+    )
+    dbpath = output_dir / f"Aroon {current_time}.db"
+    printd(f"Connecting to Database at {dbpath}!")
+    conn = sqlite3.connect(database=dbpath)
+    with tqdm(total=len(batches)) as pbar:
+        for idx, batch in enumerate(batches):
+            pbar.write(f"[{now()}] {batch=}")
+            ts = time()
+            pbar.write(f"[{now()}] Generating Aroons")
+            entries, exits, aroonosc = generate_aroons(prices, **batch)
+            # print(entries, aroonosc)
+            entries_sparse = entries.astype(pd.SparseDtype("float", np.nan))
+            entries_sparse = entries_sparse.sparse.to_coo()
+            # aroonosc = aroonosc.melt(
+            #     ignore_index=False, var_name="timeperiod", value_name="oscillator"
+            # )
+            sparse_entries = pd.DataFrame(
+                {
+                    "timestamp": entries.index[entries_sparse.row],
+                    "timeperiod": entries.columns[entries_sparse.col].get_level_values(
+                        1
+                    )
+                    * batch["interval"],
+                    "threshold": entries.columns[entries_sparse.col].get_level_values(
+                        0
+                    ),
+                    "trigger": entries_sparse.data,
+                }
+            )
+            # sparse_entries = sparse_entries.merge(
+            #     aroonosc,
+            #     how="left",
+            #     left_on=["timestamp", "timeperiod"],
+            #     right_on=["time", "timeperiod"],
+            # )
+            pbar.write(
+                f"[{now()}] {sparse_entries.memory_usage(index=True).sum() / 1024**2:.2f}MB"
+            )
+            save_db(conn, sparse_entries, "entries", pbar=pbar)
 
-def save_db(df, table, filepath, *args, **kwargs):
-    printd(f"Connecting to Database!")
-    conn = sqlite3.connect(database=f"{filepath} {current_time}.db")
-    printd(f"Converting dataframe to table")
-    df.to_sql(f"{table}_df", conn, if_exists="replace", index=False)
-    try:
-        db_stmnt = f"INSERT INTO {table} SELECT * FROM {table}_df;"
-        printd(f"{db_stmnt=}")
-        conn.execute(db_stmnt)
-    except sqlite3.OperationalError as e:
-        if "no such table:" not in str(e):
-            print(e)
-            raise e
-        db_stmnt = f"""
-            CREATE TABLE {table} AS SELECT * FROM {table}_df;
-            CREATE INDEX {table}_timestamp ON {table} (timestamp);
+            exits_sparse = exits.astype(pd.SparseDtype("float", np.nan))
+            exits_sparse = exits_sparse.sparse.to_coo()
+            sparse_exits = pd.DataFrame(
+                {
+                    "timestamp": exits.index[exits_sparse.row],
+                    "timeperiod": exits.columns[exits_sparse.col].get_level_values(1)
+                    * batch["interval"],
+                    "threshold": exits.columns[exits_sparse.col].get_level_values(0),
+                    "trigger": exits_sparse.data,
+                }
+            )
+            save_db(conn, sparse_exits, "exits", pbar=pbar)
+
+            te = time()
+            # printd("Collect Garbage")
+            # gcts = time()
+            # gc.collect()
+            # gcte = time()
+
+            pbar.write(f"[{now()}] Batch {idx} Time taken: {te - ts}")
+            pbar.update(1)
+    printd("Creating Indexes")
+    conn.executescript(
         """
-        printd(f"{db_stmnt=}")
-        conn.executescript(db_stmnt)
+        CREATE INDEX entries_timestamp_idx ON entries (timestamp);
+        CREATE INDEX exits_timestamp_idx ON exits (timestamp);
+    """
+    )
 
-    printd("Committing db changes")
-    conn.commit()
+    printd("Converting entries to Parquet")
+    db_to_parquet(conn, "entries", output_dir=output_dir)
+    printd("Converting exits to Parquet")
+    db_to_parquet(conn, "exits", output_dir=output_dir)
+
     printd("Closing db connection")
     conn.close()
 
 
-def load_multiple_prices(*args):
-    prices = {}
-    prices[1] = load_prices(*args, interval=1)
-    prices[5] = load_prices(*args, interval=5)
-    prices[15] = load_prices(*args, interval=15)
-    prices[60] = load_prices(*args, interval=60)
-    prices[720] = load_prices(*args, interval=720)
-    prices[1440] = load_prices(*args, interval=1440)
-    return prices
+def db_to_parquet(conn, table, output_dir, filename_prefix="aroon_"):
+    df = pd.read_sql(
+        f"""
+        SELECT timestamp, timeperiod, threshold, trigger
+        FROM {table}
+        ORDER BY timestamp
+        """,
+        conn,
+        parse_dates="timestamp",
+    )
+    df["timeperiod"] = df["timeperiod"].astype("uint32")
+    df["threshold"] = df["threshold"].astype("int8")
+
+    set_aroon_ids(df, table, output_dir)
+    # df.to_parquet(
+    #     output_dir / f"{current_time} - {filename_prefix}{table}.parquet",
+    #     index=False,
+    # )
+
+
+def reidentify_aroons(pair):
+    output_dir = (
+        pathlib.Path(__file__)
+        .parent.absolute()
+        .joinpath("..", "..", "output", "signals", pair)
+    )
+    entries = pq.read_table(
+        output_dir / "XBTUSD_aroon_entries_2021-05-18T0058.parquet"
+    ).to_pandas()
+    set_aroon_ids(entries, "entries", output_dir)
+
+    exits = pq.read_table(
+        output_dir / "XBTUSD_aroon_exits_2021-05-18T0058.parquet"
+    ).to_pandas()
+    set_aroon_ids(exits, "exits", output_dir)
+
+
+def set_aroon_ids(df: pd.DataFrame, name, output_dir):
+    group = df.groupby(["timeperiod", "threshold"])
+    ids = pd.DataFrame(group.groups.keys(), columns=["timeperiod", "threshold"])
+    ids["id"] = ids.index + 1
+    ids.to_parquet(
+        output_dir / f"{current_time} - aroon_{name}.ids.parquet",
+    )
+    df = df.merge(ids, on=["timeperiod", "threshold"], how="left")
+    df["id"] = df["id"].astype("uint16")
+    df = df.drop(["timeperiod", "threshold"], axis=1)
+    df.to_parquet(
+        output_dir / f"{current_time} - aroon_{name}.parquet",
+    )
 
 
 @timeme
@@ -234,7 +462,7 @@ for (i, interval) in enumerate(intervals):
     if interval == 1:
         start = 2
     else:
-        start = math.floor((intervals[i - 1] * 60) / interval)
+        start = math.floor((intervals[i - 1] * 60) / interval) + 1
     end = 60
 
     for batch_start in range(start, end, batch_size):
@@ -242,8 +470,8 @@ for (i, interval) in enumerate(intervals):
             {
                 "interval": interval,
                 "timeperiods": list(range(batch_start, batch_start + batch_size)),
-                "entry_threshold": list(range(0, 101, 5)),
-                "exit_threshold": list(range(0, -101, -5)),
+                "entry_threshold": list(range(0, 101, 10)),
+                "exit_threshold": list(range(0, -101, -10)),
             }
         )
 
@@ -255,7 +483,7 @@ def chunks(array, n):
 
 
 funky_periods = (
-    list(range(60, math.ceil(365 / 2), 5))
+    list(range(65, math.ceil(365 / 2), 5))
     + list(range(math.ceil(365 / 2), 365, 15))
     + list(range(365, 365 * 3, 30))
 )
@@ -264,26 +492,33 @@ for chunk in chunks(funky_periods, batch_size):
         {
             "interval": 1440,
             "timeperiods": chunk,
-            "entry_threshold": list(range(0, 101, 5)),
-            "exit_threshold": list(range(0, -101, -5)),
+            "entry_threshold": list(range(0, 101, 10)),
+            "exit_threshold": list(range(0, -101, -10)),
         }
     )
+# 1-5 60, 15-60 900 | 720-1440 43200
 
+adj_timeperiods = []
+for bitch in bitches:
+    adj_timeperiods += [tp * bitch["interval"] for tp in bitch["timeperiods"]]
+assert len(adj_timeperiods) == len(set(adj_timeperiods))
 
 pair = "XBTUSD"
 path = "../data/kraken"
 startDate = "2017-05-15"
 endDate = "2021-06-16"
+# startDate = "2018-02-26"
+# endDate = "2018-02-28"
 
 
-main(
+aWholeNewMain(
     pair=pair,
-    path=path,
+    price_path=path,
     startDate=startDate,
     endDate=endDate,
-    save_method=save_db,
     batches=bitches,
 )
+# reidentify_aroons(pair)
 
 
 # def update():

@@ -1,12 +1,14 @@
-from datetime import datetime
-from hydra.utils import now, printd, timeme
 import pathlib
+from datetime import datetime
 from typing import Dict, List, NamedTuple, Set, Tuple, TypeVar
+
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from tqdm import tqdm
-from numba import njit
+
+from hydra.utils import now, printd, timeme
+from hydra.money import calculate_profit
 
 current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
 pair = "XBTUSD"
@@ -16,11 +18,6 @@ reference_time = "2021-05-20T1919"
 fee = 0.001
 buy_fee = 1 + fee
 sell_fee = 1 - fee
-
-
-def load_output_signal(output_dir, reference_time, file) -> pd.DataFrame:
-    path = output_dir / "signals" / f"{reference_time} - {file}.parquet"
-    return pq.read_table(path).to_pandas()
 
 
 class BuyOrder(NamedTuple):
@@ -36,9 +33,9 @@ class SellOrder(NamedTuple):
     profit: float
 
 
-@njit(fastmath=True)
-def calculate_profit(buy_fee, sell_fee, buy_price, sell_price):
-    return (sell_price * sell_fee) / (buy_price * buy_fee)
+def load_output_signal(output_dir, reference_time, file) -> pd.DataFrame:
+    path = output_dir / "signals" / f"{reference_time} - {file}.parquet"
+    return pq.read_table(path).to_pandas()
 
 
 class Simulation:
@@ -64,7 +61,10 @@ class Simulation:
 
     def get_profit(self, sell_trigger_price):
         return calculate_profit(
-            buy_fee, sell_fee, self.buy_trigger_price, sell_trigger_price
+            self.buy_trigger_price,
+            sell_trigger_price,
+            buy_fee,
+            sell_fee,
         )
 
 

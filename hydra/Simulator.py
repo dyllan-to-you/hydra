@@ -1,23 +1,37 @@
-import copy
-import platform
+import json
 import pathlib
+import platform
+import pprint
 from datetime import datetime
-from typing import Dict, Set
-import pandas as pd
+from operator import itemgetter
+from typing import Dict, List, Set, Union
+
 import numpy as np
+import numpy.typing as npt
+import pandas as pd
+import pandas.core.groupby as pdGroupby
 import pyarrow as pa
 import pyarrow.parquet as pq
-from tqdm import tqdm
-from hydra.utils import now, printd, timeme
 from numba import njit
+from tqdm import tqdm
+
+from hydra.models import BuyOrder, Direction, SellOrder
+from hydra.utils import now, printd, timeme
+from hydra.money import calculate_profit, get_decay
+
+pp = pprint.PrettyPrinter(indent=2)
 
 
 pair = "XBTUSD"
 startDate = pd.to_datetime("2017-05-15")
-endDate = pd.to_datetime("2021-06-16")
-endDate = pd.to_datetime("2017-05-22")
+endDate = pd.to_datetime("2020-12-29")
 aroon_reference = "2021-05-20T1919"
-order_folder = "orders 2021-05-22T0041 fee=0.001"
+order_folder = "orders 2021-05-22T0531 fee=0.001"
+
+threshold_options = {"min_profit": 1.015}
+fee = 0.001
+buy_fee = 1 + fee
+sell_fee = 1 - fee
 
 
 def load_output_signal(output_dir, file) -> pd.DataFrame:
@@ -25,9 +39,9 @@ def load_output_signal(output_dir, file) -> pd.DataFrame:
     return pq.read_table(path).to_pandas()
 
 
-def load_parquet_by_date(dir, year, month, day, name):
-    parquet_dir = f"year={year}/month={month}"
-    sell_filename = f"day={day}.{name}"
+def load_parquet_by_date(dir, date, name):
+    parquet_dir = f"year={date.year}/month={date.month}"
+    sell_filename = f"day={date.day}.{name}"
     return load_output_signal(dir / parquet_dir, sell_filename)
 
 
@@ -38,11 +52,6 @@ def datetime_range(start, end, delta, inclusive=False):
         current += delta
     if inclusive:
         yield current
-
-
-@njit(cache=True)
-def get_decay(original, rate, profit, minutes_elapsed=1):
-    return ((original * profit - 1) * (rate ** minutes_elapsed)) + 1
 
 
 decay_rates = np.array(
@@ -57,19 +66,24 @@ decay_rates = np.array(
         0.05 ** (1 / 525600),
     ]
 )
+avg_denominator = sum(
+    [((len(decay_rates) - idx) / 2) for idx in range(len(decay_rates))]
+)
 
 
 class Simulation:
     id: int
-    total_profit: float
-    decays: Dict[str, int]
+    # total_profit: float
+    total_history: int
+    decays: npt.ArrayLike
     last_decay: int
 
     def __init__(self, id, last_decay):
         self.id = id
         self.last_decay = last_decay
-        self.total_profit = 1
+        # self.total_profit = 1
         self.decays = np.array([1, 1, 1, 1, 1, 1, 1, 1], dtype=np.float32)
+        self.total_history = 0
 
     def __hash__(self) -> int:
         return self.id
@@ -81,6 +95,7 @@ class Simulation:
         # self.total_profit *= profit
         elapsed = current_time - self.last_decay
         # for rate, val in self.decays.items():
+        self.total_history += 1
         self.decays = get_decay(
             self.decays,
             decay_rates,
@@ -99,11 +114,163 @@ class SimulationEncyclopedia:
         for id in ids:
             self.simulations[id] = Simulation(id, initial_decay_time)
 
-    def add_profits(self, sells, current_time):
+    def add_profits(self, sells, current_time, threshold_simulations, threshold):
         for sell in sells:
-            index, timestamp, simulation_id, profit = sell
+            index, timestamp, simulation_id, trigger_price, profit = sell
             sim = self.simulations.get(simulation_id)
             sim.add_profit(profit, current_time)
+            if sim.total_history > 10 and sim.decays[2] >= threshold["min_profit"]:
+                threshold_simulations.add(sim)
+            else:
+                threshold_simulations.discard(sim)
+        return threshold_simulations
+
+
+cache = {}
+
+# @timeme
+def get_best_simulations(
+    current_minute,
+    simulations,
+    margin: float = 0.99,
+    min_profit=1.015,
+    min_trade_history=3,
+    min_success_ratio=0.8,
+    pbar=None,
+):
+    profits = [
+        (
+            sim.id,
+            # weighted_profit,
+            # sim.total_profit,
+            # sim.success_count,
+            # sim.history_count,
+            # sim.total_history_count,
+            sum(
+                [
+                    (((len(sim.decays) - idx) / 2) / (avg_denominator) * decayed_profit)
+                    for idx, decayed_profit in enumerate(sim.decays)
+                ]
+            ),
+            sim.decays[2],
+        )
+        # TODO: [df] loop through df
+        for sim in simulations
+        # decreases the effectiveness of caching sorted profits
+        # if sim.history_count >= min_trade_history
+        # and sim.total_history_count >= 20
+        # and sim.success_count / sim.history_count >= min_success_ratio
+        # and sim.total_profit >= min_profit
+        # and (
+        #     weighted_profit := (
+        #         (sim.total_profit - 1) * (sim.success_count / sim.history_count)
+        #     )
+        #     + 1
+        # )
+        # >= min_profit
+    ]
+    if not len(profits):
+        return []
+    # else:
+    #     if pbar is not None:
+    #         pbar.write(f"[{now()}] ({current_minute}) profits ========= {len(profits)}")
+    #     else:
+    #         print(f"profits ========= {len(profits)}")
+    best_profit = max(profits, key=itemgetter(2))[2]
+    minimum = ((best_profit - min_profit) * margin) + min_profit
+    best = [(key, decay_avg) for key, decay_avg, decay in profits if decay > minimum]
+
+    if len(best) > 0:
+        best_sorted = sorted(best, key=itemgetter(1), reverse=True)
+        best_sorted_top_5 = pp.pformat(best_sorted[:5])
+        if cache.get("best_sorted_top_5") != best_sorted_top_5:
+            if pbar is not None:
+                pbar.write(f"[{now()}] ({current_minute}) qualifier {len(best)}")
+                pbar.write(best_sorted_top_5)
+            else:
+                printd(f"qualifier {len(best)}")
+                printd(best_sorted_top_5)
+            cache["best_sorted_top_5"] = best_sorted_top_5
+        return best_sorted
+    return []
+
+
+class Portfolio:
+    just_ordered: bool
+    orders: List[Union[BuyOrder, SellOrder]]
+    direction: Direction
+
+    def __init__(self):
+        self.orders = []
+        self.direction = Direction.BUY
+
+    def find_order(self, best_simulations, current_order_df):
+        if current_order_df is None:
+            return None
+
+        best_orders = current_order_df.loc[
+            current_order_df["simulation_id"].isin(best_simulations)
+        ]
+
+        return best_orders.iloc[0] if not best_orders.empty else None
+
+    def add_buy_order(self, best_simulations, current_order_df, pbar):
+        order = self.find_order(best_simulations, current_order_df)
+
+        if order is None:
+            return None
+        [timestamp, simulation_id, trigger_price] = order
+        order = BuyOrder(timestamp, trigger_price, simulation_id)
+        pbar.write(f"[{now()}] Buying your mom {order}")
+        self.orders.append(order)
+        self.direction = Direction.SELL
+        self.just_ordered = True
+        pass
+
+    def add_sell_order(self, best_simulations, current_order_df, pbar):
+        order = self.find_order(best_simulations, current_order_df)
+
+        if order is None:
+            return None
+
+        [timestamp, simulation_id, trigger_price, profit] = order
+        last_order: BuyOrder = self.orders[-1]
+        profit = calculate_profit(last_order[1], trigger_price, buy_fee, sell_fee)
+        order = SellOrder(timestamp, trigger_price, profit)
+        pbar.write(f"[{now()}] Selling yo mama {order}")
+        self.orders.append(order)
+        self.direction = Direction.BUY
+        self.just_ordered = True
+        pass
+
+
+class BuyLoader:
+    location: pathlib.Path
+    cached_buys: pdGroupby.GroupBy
+    loaded_date: pd.Timestamp
+    loaded_df: pd.DataFrame
+
+    def __init__(self, location):
+        self.location = location
+        self.loaded_date = None
+
+    def get_buys(self, date: pd.Timestamp):
+        if (
+            self.loaded_date is None
+            or self.loaded_date.year != date.year
+            or self.loaded_date.dayofyear != date.dayofyear
+        ):
+            self.cached_buys = load_parquet_by_date(self.location, date, "buy")
+            self.cached_buys = self.cached_buys.iloc[
+                self.cached_buys["timestamp"].searchsorted(date, side="left") :
+            ]
+            self.cached_buys = self.cached_buys.groupby("timestamp").__iter__()
+            self.loaded_date, self.loaded_df = next(self.cached_buys)
+
+        if self.loaded_date < date:
+            self.loaded_date, self.loaded_df = next(self.cached_buys)
+
+        return self.loaded_df if self.loaded_date == date else None
 
 
 @timeme
@@ -129,19 +296,21 @@ def main(pair, startDate, endDate, aroon_reference):
     total_ticks = total_ticks.total_seconds() / 60
     with tqdm(total=total_ticks, unit="tick", smoothing=0) as pbar:
         counter = 0
+        threshold_simulations = set()
+        portfolio = Portfolio()
+        buy_loader = BuyLoader(order_dir)
+        best_simulations = []
         for current_day in datetime_range(startDate, endDate, pd.Timedelta(1, "day")):
             try:
                 sell_day = load_parquet_by_date(
                     order_dir,
-                    current_day.year,
-                    current_day.month,
-                    current_day.day,
+                    current_day,
                     "sell",
                 )
             except Exception as e:
-                pbar.write(f"{e}")
+                pbar.write(f"[{now()}] {e}")
                 continue
-            sell_day.drop("trigger_price", axis=1, inplace=True)
+            # sell_day.drop("trigger_price", axis=1, inplace=True)
             sells = sell_day.groupby("timestamp")
             sells = sells.__iter__()
             current_sell_date, current_sell_df = next(sells)
@@ -152,15 +321,48 @@ def main(pair, startDate, endDate, aroon_reference):
             ):
                 pbar.update(1)
                 counter += 1
-                if counter % 1440 == 0:
+                portfolio.just_ordered = False
+                if False and counter == 1440:
                     return
 
-                if current_minute < current_sell_date:
-                    continue
-                pbar.set_description(f"Sell Length {len(current_sell_df)}")
-                encyclopedia.add_profits(current_sell_df.itertuples(name=None), counter)
+                if current_sell_date == current_minute:
+                    pbar.set_description(f"Sell Length {len(current_sell_df)}")
+                    threshold_simulations = encyclopedia.add_profits(
+                        current_sell_df.itertuples(name=None),
+                        counter,
+                        threshold_simulations,
+                        threshold_options,
+                    )
 
-                current_sell_date, current_sell_df = next(sells)
+                    if portfolio.direction == Direction.SELL:
+                        portfolio.add_sell_order(
+                            best_simulations, current_sell_df, pbar=pbar
+                        )
+
+                    if portfolio.just_ordered:
+                        best_simulations = get_best_simulations(
+                            current_minute,
+                            threshold_simulations,
+                            **threshold_options,
+                            pbar=pbar,
+                        )
+
+                    current_sell_date, current_sell_df = next(sells, (None, None))
+
+                if not portfolio.just_ordered and portfolio.direction == Direction.BUY:
+                    if counter % 5 == 0:
+                        best_simulations = get_best_simulations(
+                            current_minute,
+                            threshold_simulations,
+                            **threshold_options,
+                            pbar=pbar,
+                        )
+                    if len(best_simulations):
+                        buys = buy_loader.get_buys(current_minute)
+                        portfolio.add_buy_order(best_simulations, buys, pbar=pbar)
+
+        print(portfolio.orders)
+        print(json.dumps(portfolio.orders))
 
 
 main(pair, startDate, endDate, aroon_reference)

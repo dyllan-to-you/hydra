@@ -1,32 +1,30 @@
 from __future__ import annotations
+
 import copy
 import json
 import pprint
 import sqlite3
+import traceback
 import weakref
 from collections import deque
 from datetime import datetime, timedelta
-from enum import Enum
 from operator import itemgetter
+from statistics import mean
 from typing import Deque, Dict, List, NamedTuple, OrderedDict, Set
+
 import pandas
+from numba import njit
 from pandas import DataFrame
+from retrying import retry
 from six import Iterator
 from tqdm import tqdm
-from statistics import mean
-from retrying import retry
-import traceback
-from hydra.SimManager import load_prices, get_simulation_id
-from hydra.utils import printd, sanitize_filename, timeme, now as get_now_str
 
-from numba import njit
+from hydra.models import Direction
+from hydra.SimManager import get_simulation_id, load_prices
+from hydra.utils import printd, sanitize_filename, timeme, now as get_now_str
+from hydra.money import calculate_profit
 
 pp = pprint.PrettyPrinter(indent=2)
-
-
-class Direction(Enum):
-    BUY = True
-    SELL = False
 
 
 class Order(NamedTuple):
@@ -433,11 +431,6 @@ def get_aroon_from_db(db, current_time, direction, ids: List[int] = None):
     return {item for (item,) in db.fetchall()}
 
 
-@njit(fastmath=True)
-def calculate_profit(buy_fee, sell_fee, buy_price, sell_price):
-    return (sell_price * sell_fee) / (buy_price * buy_fee)
-
-
 def create_sim(ctx, current_time, current_price, entry_id, sim_id):
     sim = Simulation(sim_id, current_time)
     sim.open_position(ctx.current_time)
@@ -463,7 +456,7 @@ def add_sim_history(ctx, current_price, sim):
         raise Exception(f"ERROR: Could not find window_price for {sim.buy_time=}")
     sell_price = current_price
 
-    profit = calculate_profit(ctx.buy_fee, ctx.sell_fee, buy_price, sell_price)
+    profit = calculate_profit(buy_price, sell_price, ctx.buy_fee, ctx.sell_fee)
     trade = sim.close_position(ctx.current_time, profit)
     trades.append(trade)
 

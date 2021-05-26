@@ -23,12 +23,12 @@ pp = pprint.PrettyPrinter(indent=2)
 
 
 pair = "XBTUSD"
-startDate = pd.to_datetime("2017-05-15")
-endDate = pd.to_datetime("2020-12-29")
+startDate = pd.to_datetime("2018-01-01")
+endDate = pd.to_datetime("2019-01-01")
 aroon_reference = "2021-05-20T1919"
 order_folder = "orders 2021-05-22T0531 fee=0.001"
 
-threshold_options = {"min_profit": 1.015}
+threshold_options = {"min_profit": 1.015, "min_trade_history": 20}
 fee = 0.001
 buy_fee = 1 + fee
 sell_fee = 1 - fee
@@ -56,19 +56,13 @@ def datetime_range(start, end, delta, inclusive=False):
 
 decay_rates = np.array(
     [
-        0.05 ** (1 / 60),
         0.05 ** (1 / 180),
         0.05 ** (1 / 360),
-        0.05 ** (1 / 720),
-        0.05 ** (1 / 1440),
-        0.05 ** (1 / 10080),
-        0.05 ** (1 / 40320),
         0.05 ** (1 / 525600),
     ]
 )
-avg_denominator = sum(
-    [((len(decay_rates) - idx) / 2) for idx in range(len(decay_rates))]
-)
+decay_weights = np.array([1, 2, 0.1])
+avg_denominator = decay_weights.sum()
 
 
 class Simulation:
@@ -82,8 +76,9 @@ class Simulation:
         self.id = id
         self.last_decay = last_decay
         # self.total_profit = 1
-        self.decays = np.array([1, 1, 1, 1, 1, 1, 1, 1], dtype=np.float32)
+        self.decays = np.array([1, 1, 1], dtype=np.float32)
         self.total_history = 0
+        self.success_streak = 0
 
     def __hash__(self) -> int:
         return self.id
@@ -96,6 +91,10 @@ class Simulation:
         elapsed = current_time - self.last_decay
         # for rate, val in self.decays.items():
         self.total_history += 1
+        if profit >= 1.003:
+            self.success_streak += 1
+        elif profit < 1:
+            self.success_streak = 0
         self.decays = get_decay(
             self.decays,
             decay_rates,
@@ -119,7 +118,11 @@ class SimulationEncyclopedia:
             index, timestamp, simulation_id, trigger_price, profit = sell
             sim = self.simulations.get(simulation_id)
             sim.add_profit(profit, current_time)
-            if sim.total_history > 10 and sim.decays[2] >= threshold["min_profit"]:
+            if (
+                sim.success_streak >= 3
+                and sim.total_history > threshold["min_trade_history"]
+                and sim.decays[2] >= threshold["min_profit"]
+            ):
                 threshold_simulations.add(sim)
             else:
                 threshold_simulations.discard(sim)
@@ -127,6 +130,7 @@ class SimulationEncyclopedia:
 
 
 cache = {}
+
 
 # @timeme
 def get_best_simulations(
@@ -146,16 +150,17 @@ def get_best_simulations(
             # sim.success_count,
             # sim.history_count,
             # sim.total_history_count,
-            sum(
-                [
-                    (((len(sim.decays) - idx) / 2) / (avg_denominator) * decayed_profit)
-                    for idx, decayed_profit in enumerate(sim.decays)
-                ]
-            ),
-            sim.decays[2],
+            decay_avg,
+            sim.decays[1],
+            sim.decays,
         )
         # TODO: [df] loop through df
         for sim in simulations
+        if (
+            decay_avg := ((decay_weights / (avg_denominator)) * sim.decays).sum()
+            # for idx, decayed_profit in enumerate(sim.decays)
+        )
+        > min_profit
         # decreases the effectiveness of caching sorted profits
         # if sim.history_count >= min_trade_history
         # and sim.total_history_count >= 20
@@ -176,22 +181,26 @@ def get_best_simulations(
     #         pbar.write(f"[{now()}] ({current_minute}) profits ========= {len(profits)}")
     #     else:
     #         print(f"profits ========= {len(profits)}")
-    best_profit = max(profits, key=itemgetter(2))[2]
+    best_profit = max(profits, key=itemgetter(1))[1]
     minimum = ((best_profit - min_profit) * margin) + min_profit
-    best = [(key, decay_avg) for key, decay_avg, decay in profits if decay > minimum]
+    best = [
+        (key, decay_avg, decay, decays)
+        for key, decay_avg, decay, decays in profits
+        if decay_avg > minimum
+    ]
 
     if len(best) > 0:
-        best_sorted = sorted(best, key=itemgetter(1), reverse=True)
+        best_sorted = sorted(best, key=itemgetter(2, 1), reverse=True)
         best_sorted_top_5 = pp.pformat(best_sorted[:5])
         if cache.get("best_sorted_top_5") != best_sorted_top_5:
             if pbar is not None:
-                pbar.write(f"[{now()}] ({current_minute}) qualifier {len(best)}")
-                pbar.write(best_sorted_top_5)
+                pbar.write(
+                    f"[{now()}] ({current_minute}) qualifier {len(best)} {best_sorted_top_5}"
+                )
             else:
-                printd(f"qualifier {len(best)}")
-                printd(best_sorted_top_5)
+                printd(f"({current_minute}) qualifier {len(best)} {best_sorted_top_5}")
             cache["best_sorted_top_5"] = best_sorted_top_5
-        return best_sorted
+        return [id for id, *_ in best_sorted]
     return []
 
 
@@ -199,10 +208,12 @@ class Portfolio:
     just_ordered: bool
     orders: List[Union[BuyOrder, SellOrder]]
     direction: Direction
+    total_profit: float
 
     def __init__(self):
         self.orders = []
         self.direction = Direction.BUY
+        self.total_profit = 1.0
 
     def find_order(self, best_simulations, current_order_df):
         if current_order_df is None:
@@ -225,7 +236,6 @@ class Portfolio:
         self.orders.append(order)
         self.direction = Direction.SELL
         self.just_ordered = True
-        pass
 
     def add_sell_order(self, best_simulations, current_order_df, pbar):
         order = self.find_order(best_simulations, current_order_df)
@@ -237,11 +247,11 @@ class Portfolio:
         last_order: BuyOrder = self.orders[-1]
         profit = calculate_profit(last_order[1], trigger_price, buy_fee, sell_fee)
         order = SellOrder(timestamp, trigger_price, profit)
-        pbar.write(f"[{now()}] Selling yo mama {order}")
+        self.total_profit *= profit
+        pbar.write(f"[{now()}] Selling yo mama {order}, {self.total_profit=}")
         self.orders.append(order)
         self.direction = Direction.BUY
         self.just_ordered = True
-        pass
 
 
 class BuyLoader:
@@ -265,10 +275,10 @@ class BuyLoader:
                 self.cached_buys["timestamp"].searchsorted(date, side="left") :
             ]
             self.cached_buys = self.cached_buys.groupby("timestamp").__iter__()
-            self.loaded_date, self.loaded_df = next(self.cached_buys)
+            self.loaded_date, self.loaded_df = next(self.cached_buys, (None, None))
 
-        if self.loaded_date < date:
-            self.loaded_date, self.loaded_df = next(self.cached_buys)
+        if self.loaded_date is not None and self.loaded_date < date:
+            self.loaded_date, self.loaded_df = next(self.cached_buys, (None, None))
 
         return self.loaded_df if self.loaded_date == date else None
 
@@ -313,7 +323,7 @@ def main(pair, startDate, endDate, aroon_reference):
             # sell_day.drop("trigger_price", axis=1, inplace=True)
             sells = sell_day.groupby("timestamp")
             sells = sells.__iter__()
-            current_sell_date, current_sell_df = next(sells)
+            current_sell_date, current_sell_df = next(sells, (None, None))
             for current_minute in datetime_range(
                 current_day,
                 current_day + pd.Timedelta(1, "day"),
@@ -322,8 +332,7 @@ def main(pair, startDate, endDate, aroon_reference):
                 pbar.update(1)
                 counter += 1
                 portfolio.just_ordered = False
-                if False and counter == 1440:
-                    return
+                # counter == 1440:
 
                 if current_sell_date == current_minute:
                     pbar.set_description(f"Sell Length {len(current_sell_df)}")

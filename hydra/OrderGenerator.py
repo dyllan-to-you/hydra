@@ -31,6 +31,7 @@ class SellOrder(NamedTuple):
     simulation_id: int
     trigger_price: float
     profit: float
+    hold_time: int
 
 
 def load_output_signal(output_dir, reference_time, file) -> pd.DataFrame:
@@ -44,6 +45,7 @@ class Simulation:
     exit_id: int
     open_position: bool
     buy_trigger_price: float
+    buy_time: datetime
 
     def __init__(self, id, entry_id, exit_id):
         self.id = id
@@ -51,6 +53,7 @@ class Simulation:
         self.exit_id = exit_id
         self.open_position = False
         self.buy_trigger_price = None
+        self.buy_time = None
         pass
 
     def __hash__(self) -> int:
@@ -66,6 +69,9 @@ class Simulation:
             buy_fee,
             sell_fee,
         )
+
+    def get_hold_time(self, sell_time):
+        return sell_time - self.buy_time
 
 
 class SimulationEncyclopedia:
@@ -88,12 +94,14 @@ class SimulationEncyclopedia:
             sim = self.simulations.get(simId)
             sim.open_position = True
             sim.buy_trigger_price = trigger
+            sim.buy_time = timestamp
 
     def update_sells(self, sells: List[SellOrder]):
-        for timestamp, simId, trigger, profit in sells:
+        for timestamp, simId, *_ in sells:
             sim = self.simulations.get(simId)
             sim.open_position = False
             sim.buy_trigger_price = None
+            sim.buy_time = None
 
 
 @timeme
@@ -306,7 +314,13 @@ def create_orders(
     if desired_position:
         level = "exit_id"
         orders = [
-            SellOrder(timestamp, sim.id, trigger, sim.get_profit(trigger))
+            SellOrder(
+                timestamp,
+                sim.id,
+                trigger,
+                sim.get_profit(trigger),
+                sim.get_hold_time(timestamp),
+            )
             for idx, timestamp, trigger, id in indicator_signal.itertuples()
             for sim in encyclopedia.by_exit.get(id)
             if sim.open_position == desired_position
@@ -327,7 +341,7 @@ def create_orders(
 
 def filter_orders(buys, sells) -> Tuple[List[BuyOrder], List[SellOrder]]:
     buysims = {simId for timestamp, simId, trigger in buys}
-    sellsims = {simId for timestamp, simId, trigger, profit in sells}
+    sellsims = {simId for timestamp, simId, *_ in sells}
     both = buysims & sellsims
 
     return [buy for buy in buys if buy[1] not in both], [

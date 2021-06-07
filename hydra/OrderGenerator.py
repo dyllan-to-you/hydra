@@ -12,12 +12,13 @@ from hydra.money import calculate_profit
 
 current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
 pair = "XBTUSD"
-startDate = "2017-05-15"
-endDate = "2021-06-16"
+startDate = "2018-04-12"
+endDate = "2021-01-01"
 reference_time = "2021-05-20T1919"
 fee = 0.001
 buy_fee = 1 + fee
 sell_fee = 1 - fee
+saved_order_dir = pathlib.Path("F:/hydra/")
 
 
 class BuyOrder(NamedTuple):
@@ -31,7 +32,7 @@ class SellOrder(NamedTuple):
     simulation_id: int
     trigger_price: float
     profit: float
-    hold_time: int
+    hold_time: datetime
 
 
 def load_output_signal(output_dir, reference_time, file) -> pd.DataFrame:
@@ -89,12 +90,12 @@ class SimulationEncyclopedia:
             self.by_entry.setdefault(val["entry_id"], set()).add(sim)
             self.by_exit.setdefault(val["exit_id"], set()).add(sim)
 
-    def update_buys(self, buys: List[BuyOrder]):
+    def update_buys(self, buys: List[BuyOrder], timestamp_in_minutes):
         for timestamp, simId, trigger in buys:
             sim = self.simulations.get(simId)
             sim.open_position = True
             sim.buy_trigger_price = trigger
-            sim.buy_time = timestamp
+            sim.buy_time = timestamp_in_minutes
 
     def update_sells(self, sells: List[SellOrder]):
         for timestamp, simId, *_ in sells:
@@ -156,16 +157,22 @@ def main(pair, startDate, endDate, reference_time):
         last_entry_timestamp = next_entry_timestamp
         last_exit_timestamp = next_exit_timestamp
         # pbar.update(2)
-        start_time = next_entry_timestamp
-        counter = 0
+        start_time_entry = next_entry_timestamp
+        start_time_exit = next_exit_timestamp
+        timestamp_in_minutes_entry = 0
+        timestamp_in_minutes_exit = 0
         while True:
             # pbar.write(f"{next_entry_timestamp}, {next_exit_timestamp}")
+            next_time_entry = next_entry_timestamp
+            time_delta = (next_time_entry - start_time_entry).total_seconds() / 60
+            pbar.update(time_delta)
+            timestamp_in_minutes_entry += time_delta
+            start_time_entry = next_time_entry
 
-            if counter % 10 == 0:
-                next_time = next_entry_timestamp
-                pbar.update((next_time - start_time).total_seconds() / 60)
-                start_time = next_time
-            counter += 1
+            next_time_exit = next_exit_timestamp
+            time_delta = (next_time_exit - start_time_exit).total_seconds() / 60
+            timestamp_in_minutes_exit += time_delta
+            start_time_exit = next_time_exit
             # snappy: 15:07
             # brotli2 / 10 counts: 15:37 (half the space)
             # brotli2 / 100 counts: 15:08
@@ -178,9 +185,6 @@ def main(pair, startDate, endDate, reference_time):
                 break
             elif next_entry_timestamp == next_exit_timestamp:
                 # pbar.write(f"[{now()}] Tiedstamp")
-                next_entry_timestamp, next_entry_df = next(entries, (None, None))
-                next_exit_timestamp, next_exit_df = next(exits, (None, None))
-
                 last_entry_timestamp = buy_saver.save_orders(
                     orders,
                     last_entry_timestamp,
@@ -195,21 +199,26 @@ def main(pair, startDate, endDate, reference_time):
                 )
 
                 # pbar.write(f"[{now()}] Creating Orders")
-                sells = create_orders(encyclopedia, next_exit_df, True)
-                buys = create_orders(encyclopedia, next_entry_df, False)
+                sells = create_orders(
+                    encyclopedia, next_exit_df, timestamp_in_minutes_exit, True
+                )
+                buys = create_orders(
+                    encyclopedia, next_entry_df, timestamp_in_minutes_entry, False
+                )
 
                 # pbar.write(f"[{now()}] Filtering Orders")
                 buys, sells = filter_orders(buys, sells)
 
                 # pbar.write(f"[{now()}] Updating Simulations")
-                encyclopedia.update_buys(buys)
+                encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
                 orders["buy"] += buys
                 encyclopedia.update_sells(sells)
                 orders["sell"] += sells
+
+                next_entry_timestamp, next_entry_df = next(entries, (None, None))
+                next_exit_timestamp, next_exit_df = next(exits, (None, None))
             elif next_entry_timestamp < next_exit_timestamp:
                 # pbar.write(f"[{now()}] Lagging Entry")
-                next_entry_timestamp, next_entry_df = next(entries, (None, None))
-
                 last_entry_timestamp = buy_saver.save_orders(
                     orders,
                     last_entry_timestamp,
@@ -217,18 +226,20 @@ def main(pair, startDate, endDate, reference_time):
                     pbar,
                 )
                 # pbar.write(f"[{now()}] Creating Orders")
-                buys = create_orders(encyclopedia, next_entry_df, False)
+                buys = create_orders(
+                    encyclopedia, next_entry_df, timestamp_in_minutes_entry, False
+                )
                 # pbar.write(f"[{now()}] Updating Simulations")
-                encyclopedia.update_buys(buys)
+                encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
                 orders["buy"] += buys
+
+                next_entry_timestamp, next_entry_df = next(entries, (None, None))
             # if entries finish before exits, keep doing exits
             elif (
                 next_entry_timestamp is None
                 or next_exit_timestamp < next_entry_timestamp
             ):
                 # pbar.write(f"[{now()}] Lagging Exit")
-                next_exit_timestamp, next_exit_df = next(exits, (None, None))
-
                 last_exit_timestamp = sell_saver.save_orders(
                     orders,
                     last_exit_timestamp,
@@ -236,10 +247,14 @@ def main(pair, startDate, endDate, reference_time):
                     pbar,
                 )
                 # pbar.write(f"[{now()}] Creating Orders")
-                sells = create_orders(encyclopedia, next_exit_df, True)
+                sells = create_orders(
+                    encyclopedia, next_exit_df, timestamp_in_minutes_exit, True
+                )
                 # pbar.write(f"[{now()}] Updating Simulations")
                 encyclopedia.update_sells(sells)
                 orders["sell"] += sells
+
+                next_exit_timestamp, next_exit_df = next(exits, (None, None))
 
 
 class OrderSaver:
@@ -267,7 +282,8 @@ class OrderSaver:
         table = pa.Table.from_pandas(order_df)
 
         path = (
-            pathlib.Path(f"F:/hydra/orders {current_time} fee={fee}/")
+            saved_order_dir
+            / f"orders {current_time} fee={fee}"
             / f"year={last_timestamp.year}"
             / f"month={last_timestamp.month}"
         )
@@ -304,7 +320,10 @@ def flatten(object):
 
 
 def create_orders(
-    encyclopedia: SimulationEncyclopedia, indicator_signal, desired_position
+    encyclopedia: SimulationEncyclopedia,
+    indicator_signal,
+    timestamp_in_minutes,
+    desired_position,
 ) -> List[TypeVar("Order", BuyOrder, SellOrder)]:
     # printd("Creating order", desired_position)
     indicator_signal = indicator_signal.loc[indicator_signal["trigger"] != 0]
@@ -319,7 +338,7 @@ def create_orders(
                 sim.id,
                 trigger,
                 sim.get_profit(trigger),
-                sim.get_hold_time(timestamp),
+                sim.get_hold_time(timestamp_in_minutes),
             )
             for idx, timestamp, trigger, id in indicator_signal.itertuples()
             for sim in encyclopedia.by_exit.get(id)

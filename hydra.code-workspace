@@ -6,6 +6,15 @@
 	],
 	"settings": {
 		"python.venvPath": "C:\\\\Users\\\\Jarwain\\\\AppData\\\\Local\\\\pypoetry\\\\Cache\\\\virtualenvs",
-		"jupyter.jupyterServerType": "local"
+		"jupyter.jupyterServerType": "local",
+		"sqltools.connections": [
+			{
+				"previewLimit": 50,
+				"driver": "SQLite",
+				"name": "Arooode",
+				"database": "${workspaceFolder:hydra}/output/signals/XBTUSD Aroon 2021-04-16T2204.db"
+			}
+		],
+		"sqltools.useNodeRuntime": true
 	}
 }

@@ -18,8 +18,8 @@ reference_time = "2021-05-20T1919"
 fee = 0.001
 buy_fee = 1 + fee
 sell_fee = 1 - fee
-saved_order_dir = pathlib.Path("F:/hydra/")
-
+project_dir = pathlib.Path(__file__).absolute().parent.parent
+saved_order_dir = project_dir / 'output' / pair / 'orders'
 
 class BuyOrder(NamedTuple):
     timestamp: datetime
@@ -283,7 +283,7 @@ class OrderSaver:
 
         path = (
             saved_order_dir
-            / f"orders {current_time} fee={fee}"
+            / f"order {current_time} fee={fee}"
             / f"year={last_timestamp.year}"
             / f"month={last_timestamp.month}"
         )

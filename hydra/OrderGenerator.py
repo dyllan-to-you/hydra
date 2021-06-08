@@ -1,15 +1,21 @@
+from hydra.models import Direction
 import pathlib
 from datetime import datetime
+import concurrent.futures
 from typing import Dict, List, NamedTuple, Set, Tuple, TypeVar
 
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from tqdm import tqdm
+import psutil
+import ray
 
 from hydra.utils import now, printd, timeme
 from hydra.money import calculate_profit
 
+
+NUM_CHUNKS = psutil.cpu_count()
 current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
 pair = "XBTUSD"
 startDate = "2018-04-12"
@@ -19,7 +25,8 @@ fee = 0.001
 buy_fee = 1 + fee
 sell_fee = 1 - fee
 project_dir = pathlib.Path(__file__).absolute().parent.parent
-saved_order_dir = project_dir / 'output' / pair / 'orders'
+saved_order_dir = project_dir / "output" / pair / "orders"
+
 
 class BuyOrder(NamedTuple):
     timestamp: datetime
@@ -55,13 +62,12 @@ class Simulation:
         self.open_position = False
         self.buy_trigger_price = None
         self.buy_time = None
-        pass
 
-    def __hash__(self) -> int:
-        return self.id
+    # def __hash__(self) -> int:
+    #     return self.id
 
-    def __eq__(self, o: object) -> bool:
-        return self.id == o.id
+    # def __eq__(self, o: object) -> bool:
+    #     return self.id == o.id
 
     def get_profit(self, sell_trigger_price):
         return calculate_profit(
@@ -74,35 +80,124 @@ class Simulation:
     def get_hold_time(self, sell_time):
         return sell_time - self.buy_time
 
+    def create_sell_order(self, timestamp, trigger, timestamp_in_minutes):
+        if self.open_position == Direction.BUY:
+            return SellOrder(
+                timestamp,
+                self.id,
+                trigger,
+                self.get_profit(trigger),
+                self.get_hold_time(timestamp_in_minutes),
+            )
+
+    def create_buy_order(self, timestamp, trigger):
+        if self.open_position == Direction.SELL:
+            return BuyOrder(timestamp, self.id, trigger)
+
+    def update_buy(self, trigger, timestamp_in_minutes):
+        self.open_position = True
+        self.buy_trigger_price = trigger
+        self.buy_time = timestamp_in_minutes
+
+    def update_sell(self):
+        self.open_position = False
+        self.buy_trigger_price = None
+        self.buy_time = None
+
+
+@ray.remote
+class SimulationChunk:
+    simulations: Dict[int, Simulation]
+
+    def __init__(self):
+        self.simulations = dict()
+
+    def add_simulation(self, simulation):
+        self.simulations[simulation.id] = simulation
+
+    def update_buy(self, id, *args, **kwargs):
+        return self.simulations[id].update_buy(*args, **kwargs)
+
+    def update_sell(self, id, *args, **kwargs):
+        return self.simulations[id].update_sell(*args, **kwargs)
+
+    def create_buy_order(self, id, *args, **kwargs):
+        return self.simulations[id].create_buy_order(*args, **kwargs)
+
+    def create_sell_order(self, id, *args, **kwargs):
+        return self.simulations[id].create_sell_order(*args, **kwargs)
+
 
 class SimulationEncyclopedia:
-    simulations: Dict[int, Simulation]
-    by_entry: Dict[int, Set[Simulation]]
-    by_exit: Dict[int, Set[Simulation]]
+    chunks: List[SimulationChunk]
+    simulation_chunks: Dict[int, SimulationChunk]
+    by_entry: Dict[int, Set[int]]
+    by_exit: Dict[int, Set[int]]
 
     def __init__(self, simulations: Dict[int, Dict]):
         self.by_entry = {}  # dict.fromkeys(set(entries))
         self.by_exit = {}  # dict.fromkeys(set(exits))
-        self.simulations = dict.fromkeys(set(simulations.keys()))
-        for id, val in simulations.items():
-            sim = Simulation(id, val["entry_id"], val["exit_id"])
-            self.simulations[id] = sim
-            self.by_entry.setdefault(val["entry_id"], set()).add(sim)
-            self.by_exit.setdefault(val["exit_id"], set()).add(sim)
+        self.simulation_chunks = dict.fromkeys(set(simulations.keys()))
+
+        self.chunks = [SimulationChunk.remote() for chunk in range(NUM_CHUNKS)]
+
+        for idx, (id, val) in enumerate(simulations.items()):
+            chunk = self.chunks[idx % NUM_CHUNKS]
+            chunk.add_simulation.remote(Simulation(id, val["entry_id"], val["exit_id"]))
+            self.simulation_chunks[id] = chunk
+            self.by_entry.setdefault(val["entry_id"], set()).add(id)
+            self.by_exit.setdefault(val["exit_id"], set()).add(id)
+
+    def get_simulation_chunk(self, id):
+        return self.simulation_chunks[id]
 
     def update_buys(self, buys: List[BuyOrder], timestamp_in_minutes):
-        for timestamp, simId, trigger in buys:
-            sim = self.simulations.get(simId)
-            sim.open_position = True
-            sim.buy_trigger_price = trigger
-            sim.buy_time = timestamp_in_minutes
+        # TODO: May need to collect "completed"
+        # and check for completions across all simulations before returning
+        for timestamp, simId, trigger, *_ in buys:
+            self.get_simulation_chunk(simId).update_buy.remote(
+                simId, trigger, timestamp_in_minutes
+            )
 
     def update_sells(self, sells: List[SellOrder]):
         for timestamp, simId, *_ in sells:
-            sim = self.simulations.get(simId)
-            sim.open_position = False
-            sim.buy_trigger_price = None
-            sim.buy_time = None
+            self.get_simulation_chunk(simId).update_sell.remote(simId)
+
+    def create_orders(
+        self,
+        indicator_signal: pd.DataFrame,
+        timestamp_in_minutes,
+        is_exit,
+    ) -> List[TypeVar("Order", BuyOrder, SellOrder)]:
+        # printd("Creating order", is_exit)
+        indicator_signal = indicator_signal.loc[indicator_signal["trigger"] != 0]
+        # printd("Signal Indicated")
+
+        # Exit
+        if is_exit:
+            orders = [
+                self.get_simulation_chunk(simId)
+                .create_sell_order.remote(
+                    simId, timestamp, trigger, timestamp_in_minutes, is_exit
+                )
+                .future()
+                for idx, timestamp, trigger, id in indicator_signal.itertuples()
+                for simId in self.by_exit.get(id)
+            ]
+        # Entry
+        else:
+            orders = [
+                self.get_simulation_chunk(simId)
+                .create_buy_order.remote(simId, timestamp, trigger)
+                .future()
+                for idx, timestamp, trigger, id in indicator_signal.itertuples()
+                for simId in self.by_entry.get(id)
+            ]
+        # printd("Simulations Found")
+        # printd("Simulating Desire")
+        # TODO: Verify that `done` does not contain any None/empty orders
+        done, not_done = concurrent.futures.wait(orders)
+        return done
 
 
 @timeme
@@ -125,7 +220,6 @@ def main(pair, startDate, endDate, reference_time):
     encyclopedia = SimulationEncyclopedia(simulations_dick)
     del simulations_df
     del simulations_dick
-    print(encyclopedia.simulations.get(0))
     printd("Loading Entries")
     entries = (
         load_output_signal(output_dir, reference_time, "aroon_entries")
@@ -199,11 +293,11 @@ def main(pair, startDate, endDate, reference_time):
                 )
 
                 # pbar.write(f"[{now()}] Creating Orders")
-                sells = create_orders(
-                    encyclopedia, next_exit_df, timestamp_in_minutes_exit, True
+                sells = encyclopedia.create_orders(
+                    next_exit_df, timestamp_in_minutes_exit, True
                 )
-                buys = create_orders(
-                    encyclopedia, next_entry_df, timestamp_in_minutes_entry, False
+                buys = encyclopedia.create_orders(
+                    next_entry_df, timestamp_in_minutes_entry, False
                 )
 
                 # pbar.write(f"[{now()}] Filtering Orders")
@@ -226,8 +320,8 @@ def main(pair, startDate, endDate, reference_time):
                     pbar,
                 )
                 # pbar.write(f"[{now()}] Creating Orders")
-                buys = create_orders(
-                    encyclopedia, next_entry_df, timestamp_in_minutes_entry, False
+                buys = encyclopedia.create_orders(
+                    next_entry_df, timestamp_in_minutes_entry, False
                 )
                 # pbar.write(f"[{now()}] Updating Simulations")
                 encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
@@ -247,8 +341,8 @@ def main(pair, startDate, endDate, reference_time):
                     pbar,
                 )
                 # pbar.write(f"[{now()}] Creating Orders")
-                sells = create_orders(
-                    encyclopedia, next_exit_df, timestamp_in_minutes_exit, True
+                sells = encyclopedia.create_orders(
+                    next_exit_df, timestamp_in_minutes_exit, True
                 )
                 # pbar.write(f"[{now()}] Updating Simulations")
                 encyclopedia.update_sells(sells)
@@ -303,6 +397,7 @@ class OrderSaver:
             )
 
         self.writer.write_table(table)
+        pbar.set_description(f"[{now()}] Saved {last_timestamp.date()}")
         last_timestamp = next_timestamp
         orders[self.type] = []
         return last_timestamp
@@ -319,45 +414,6 @@ def flatten(object):
             yield item
 
 
-def create_orders(
-    encyclopedia: SimulationEncyclopedia,
-    indicator_signal,
-    timestamp_in_minutes,
-    desired_position,
-) -> List[TypeVar("Order", BuyOrder, SellOrder)]:
-    # printd("Creating order", desired_position)
-    indicator_signal = indicator_signal.loc[indicator_signal["trigger"] != 0]
-    # printd("Signal Indicated")
-
-    # Exit
-    if desired_position:
-        level = "exit_id"
-        orders = [
-            SellOrder(
-                timestamp,
-                sim.id,
-                trigger,
-                sim.get_profit(trigger),
-                sim.get_hold_time(timestamp_in_minutes),
-            )
-            for idx, timestamp, trigger, id in indicator_signal.itertuples()
-            for sim in encyclopedia.by_exit.get(id)
-            if sim.open_position == desired_position
-        ]
-    # Entry
-    else:
-        level = "entry_id"
-        orders = [
-            BuyOrder(timestamp, sim.id, trigger)
-            for idx, timestamp, trigger, id in indicator_signal.itertuples()
-            for sim in encyclopedia.by_entry.get(id)
-            if sim.open_position == desired_position
-        ]
-    # printd("Simulations Found")
-    # printd("Simulating Desire")
-    return orders
-
-
 def filter_orders(buys, sells) -> Tuple[List[BuyOrder], List[SellOrder]]:
     buysims = {simId for timestamp, simId, trigger in buys}
     sellsims = {simId for timestamp, simId, *_ in sells}
@@ -368,4 +424,9 @@ def filter_orders(buys, sells) -> Tuple[List[BuyOrder], List[SellOrder]]:
     ]
 
 
-main(pair, startDate, endDate, reference_time)
+if __name__ == "__main__":
+    try:
+        ray.init()
+        main(pair, startDate, endDate, reference_time)
+    finally:
+        ray.shutdown()

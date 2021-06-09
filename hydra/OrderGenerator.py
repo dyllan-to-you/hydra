@@ -1,3 +1,4 @@
+import itertools
 from hydra.models import Direction
 import pathlib
 from datetime import datetime
@@ -15,7 +16,7 @@ from hydra.utils import now, printd, timeme
 from hydra.money import calculate_profit
 
 
-NUM_CHUNKS = psutil.cpu_count()
+NUM_CHUNKS = psutil.cpu_count(logical=False)
 current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
 pair = "XBTUSD"
 startDate = "2018-04-12"
@@ -26,6 +27,12 @@ buy_fee = 1 + fee
 sell_fee = 1 - fee
 project_dir = pathlib.Path(__file__).absolute().parent.parent
 saved_order_dir = project_dir / "output" / pair / "orders"
+
+
+def chunks(l, n):
+    """Yield n number of striped chunks from l."""
+    for i in range(0, n):
+        yield l[i::n]
 
 
 class BuyOrder(NamedTuple):
@@ -63,81 +70,92 @@ class Simulation:
         self.buy_trigger_price = None
         self.buy_time = None
 
-    # def __hash__(self) -> int:
-    #     return self.id
+    def __hash__(self) -> int:
+        return self.id
 
-    # def __eq__(self, o: object) -> bool:
-    #     return self.id == o.id
+    def __eq__(self, o: object) -> bool:
+        return self.id == o.id
 
-    def get_profit(self, sell_trigger_price):
-        return calculate_profit(
-            self.buy_trigger_price,
-            sell_trigger_price,
-            buy_fee,
-            sell_fee,
+
+def get_profit(sim, sell_trigger_price):
+    return calculate_profit(
+        sim.buy_trigger_price,
+        sell_trigger_price,
+        buy_fee,
+        sell_fee,
+    )
+
+
+def get_hold_time(sim, sell_time):
+    return sell_time - sim.buy_time
+
+
+def create_sell_order(sim, timestamp, trigger, timestamp_in_minutes):
+    return (
+        SellOrder(
+            timestamp,
+            sim.id,
+            trigger,
+            get_profit(sim, trigger),
+            get_hold_time(sim, timestamp_in_minutes),
         )
-
-    def get_hold_time(self, sell_time):
-        return sell_time - self.buy_time
-
-    def create_sell_order(self, timestamp, trigger, timestamp_in_minutes):
-        return (
-            SellOrder(
-                timestamp,
-                self.id,
-                trigger,
-                self.get_profit(trigger),
-                self.get_hold_time(timestamp_in_minutes),
-            )
-            if self.open_position == Direction.BUY
-            else None
-        )
-
-    def create_buy_order(self, timestamp, trigger):
-        return (
-            BuyOrder(timestamp, self.id, trigger)
-            if self.open_position == Direction.SELL
-            else None
-        )
-
-    def update_buy(self, trigger, timestamp_in_minutes):
-        self.open_position = True
-        self.buy_trigger_price = trigger
-        self.buy_time = timestamp_in_minutes
-
-    def update_sell(self):
-        self.open_position = False
-        self.buy_trigger_price = None
-        self.buy_time = None
+        if sim.open_position == Direction.BUY
+        else None
+    )
 
 
-@ray.remote
+def create_buy_order(sim, timestamp, trigger):
+    return (
+        BuyOrder(timestamp, sim.id, trigger)
+        if sim.open_position == Direction.SELL
+        else None
+    )
+
+
+def update_buy(sim, trigger, timestamp_in_minutes):
+    sim.open_position = True
+    sim.buy_trigger_price = trigger
+    sim.buy_time = timestamp_in_minutes
+    return sim
+
+
+def update_sell(sim):
+    sim.open_position = False
+    sim.buy_trigger_price = None
+    sim.buy_time = None
+    return sim
+
+
+@ray.remote(num_cpus=1, num_gpus=0)
 class SimulationActor:
-    # simulations: Dict[int, Simulation]
+    def __init__(self, chunk):
+        pass
 
-    # def __init__(self):
-    #     self.simulations = dict()
+    #     psutil.Process().cpu_affinity([chunk])
 
-    # def add_simulation(self, simulation):
-    #     self.simulations[simulation.id] = simulation
+    def update_buy(self, sim, *args, **kwargs):
+        return update_buy(sim, *args, **kwargs)
 
-    def update_buy(self, id, *args, **kwargs):
-        return ray.get(id).update_buy(*args, **kwargs)
+    def update_sell(self, sim, *args, **kwargs):
+        return update_sell(sim, *args, **kwargs)
 
-    def update_sell(self, id, *args, **kwargs):
-        return ray.get(id).update_sell(*args, **kwargs)
+    def create_buy_order(self, chunk):
+        return [
+            create_buy_order(sim, timestamp, trigger)
+            for sim, timestamp, trigger in chunk
+        ]
 
-    def create_buy_order(self, id, *args, **kwargs):
-        return ray.get(id).create_buy_order(*args, **kwargs)
-
-    def create_sell_order(self, id, *args, **kwargs):
-        return ray.get(id).create_sell_order(*args, **kwargs)
+    def create_sell_order(self, chunk, timestamp_in_minutes):
+        return [
+            create_sell_order(sim, timestamp, trigger, timestamp_in_minutes)
+            for sim, timestamp, trigger in chunk
+        ]
 
 
 class SimulationEncyclopedia:
     actors: List[SimulationActor]
     actor_pool: ray.util.ActorPool
-    simulations: Dict[int, Simulation]
+    simulations: Dict[int, Dict]
     by_entry: Dict[int, Set[int]]
     by_exit: Dict[int, Set[int]]
 
@@ -146,35 +164,54 @@ class SimulationEncyclopedia:
         self.by_exit = {}  # dict.frogmkeys(set(exits))
         self.simulations = dict.fromkeys(set(simulations.keys()))
 
-        self.actors = [SimulationActor.remote() for chunk in range(NUM_CHUNKS)]
-        self.actor_pool = ray.util.ActorPool(self.actors)
+        # self.actors = [SimulationActor.remote(chunk) for chunk in range(NUM_CHUNKS)]
+        # self.actor_pool = ray.util.ActorPool(self.actors)
 
-        for idx, (id, val) in enumerate(tqdm(simulations.items())):
-            # chunk = self.actors[idx % NUM_CHUNKS]
-            sim = ray.put(Simulation(id, val["entry_id"], val["exit_id"]))
+        for id, val in tqdm(simulations.items()):
+            sim = Simulation(id, val["entry_id"], val["exit_id"])
             self.simulations[id] = sim
-            self.by_entry.setdefault(val["entry_id"], set()).add(id)
-            self.by_exit.setdefault(val["exit_id"], set()).add(id)
+            self.by_entry.setdefault(val["entry_id"], set()).add(sim)
+            self.by_exit.setdefault(val["exit_id"], set()).add(sim)
+
+    # def update_simulation(self, sim):
+    #     ref = ray.put(sim)
+    #     self.simulations[sim.id] = ref
 
     def update_buys(self, buys: List[BuyOrder], timestamp_in_minutes):
-        def fn(actor, value):
-            if value is None:
-                return None
-            timestamp, simId, trigger, *_ = value
-            return actor.update_buy.remote(
-                self.simulations[simId], trigger, timestamp_in_minutes
-            )
+        for timestamp, simId, trigger, *_ in buys:
+            update_buy(self.simulations[simId], trigger, timestamp_in_minutes)
 
-        printd("Updated", len(list(self.actor_pool.map_unordered(fn, buys))), "buys")
+        # def fn(actor, value):
+        #     if value is None:
+        #         return None
+        #     timestamp, simId, trigger, *_ = value
+        #     return actor.update_buy.remote(
+        #         self.simulations[simId], trigger, timestamp_in_minutes
+        #     )
+
+        # count = 0
+        # for sim in self.actor_pool.map_unordered(fn, buys):
+        #     count += 1
+        #     self.update_simulation(sim)
+
+        # printd("Updated", count, "buys")
 
     def update_sells(self, sells: List[SellOrder]):
-        def fn(actor, value):
-            if value is None:
-                return None
-            timestamp, simId, trigger, *_ = value
-            return actor.update_sell.remote(self.simulations[simId])
+        for timestamp, simId, trigger, *_ in sells:
+            update_sell(self.simulations[simId])
 
-        printd("Updated", len(list(self.actor_pool.map_unordered(fn, sells))), "sells")
+        # def fn(actor, value):
+        #     if value is None:
+        #         return None
+        #     timestamp, simId, trigger, *_ = value
+        #     return actor.update_sell.remote(self.simulations[simId])
+
+        # count = 0
+        # for sim in self.actor_pool.map_unordered(fn, sells):
+        #     count += 1
+        #     self.update_simulation(sim)
+
+        # printd("Updated", count, "sells")
 
     def create_orders(
         self,
@@ -189,40 +226,54 @@ class SimulationEncyclopedia:
         # Exit
         if is_exit:
 
-            def create_sells(actor, value):
-                simId, timestamp, trigger = value
-                return actor.create_sell_order.remote(
-                    self.simulations[simId], timestamp, trigger, timestamp_in_minutes
-                )
+            # def create_sells(actor, chunk):
+            #     return actor.create_sell_order.remote(chunk, timestamp_in_minutes)
 
-            orders = self.actor_pool.map_unordered(
-                create_sells,
-                [
-                    (simId, timestamp, trigger)
-                    for idx, timestamp, trigger, id in indicator_signal.itertuples()
-                    for simId in self.by_exit.get(id)
-                ],
-            )
+            # orders = self.actor_pool.map_unordered(
+            #     create_sells,
+            #     chunks(
+            #         [
+            #             (self.simulations[simId], timestamp, trigger)
+            #             for idx, timestamp, trigger, id in indicator_signal.itertuples()
+            #             for simId in self.by_exit.get(id)
+            #         ],
+            #         NUM_CHUNKS,
+            #     ),
+            # )
+            orders = [
+                create_sell_order(sim, timestamp, trigger, timestamp_in_minutes)
+                for idx, timestamp, trigger, id in indicator_signal.itertuples()
+                for sim in self.by_exit.get(id)
+                if sim.open_position == Direction.BUY
+            ]
         # Entry
         else:
 
-            def create_buys(actor, value):
-                simId, timestamp, trigger = value
-                return actor.create_buy_order.remote(
-                    self.simulations[simId], timestamp, trigger
-                )
+            # def create_buys(actor, chunk):
+            #     return actor.create_buy_order.remote(chunk)
 
-            orders = self.actor_pool.map_unordered(
-                create_buys,
-                [
-                    (simId, timestamp, trigger)
-                    for idx, timestamp, trigger, id in indicator_signal.itertuples()
-                    for simId in self.by_entry.get(id)
-                ],
-            )
+            # orders = self.actor_pool.map_unordered(
+            #     create_buys,
+            #     chunks(
+            #         [
+            #             (self.simulations[simId], timestamp, trigger)
+            #             for idx, timestamp, trigger, id in indicator_signal.itertuples()
+            #             for simId in self.by_entry.get(id)
+            #         ],
+            #         NUM_CHUNKS,
+            #     ),
+            # )
+            orders = [
+                create_buy_order(sim, timestamp, trigger)
+                for idx, timestamp, trigger, id in indicator_signal.itertuples()
+                for sim in self.by_entry.get(id)
+                if sim.open_position == Direction.SELL
+            ]
         # printd("Simulations Found")
         # printd("Simulating Desire")
-        return filter(lambda x: x is not None, orders)
+        return orders  # filter(
+        # lambda x: x is not None, orders
+        # )  # itertools.chain.from_iterable(orders))
 
 
 @timeme
@@ -451,7 +502,8 @@ def filter_orders(buys, sells) -> Tuple[List[BuyOrder], List[SellOrder]]:
 
 if __name__ == "__main__":
     try:
-        ray.init()
+        # ray.init(num_cpus=NUM_CHUNKS, local_mode=True)
         main(pair, startDate, endDate, reference_time)
     finally:
-        ray.shutdown()
+        # ray.shutdown()
+        pass

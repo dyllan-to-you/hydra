@@ -5,6 +5,7 @@ from datetime import datetime
 import itertools
 from typing import Dict, List, NamedTuple, Set, Tuple, TypeVar
 
+import numpy as np
 import pandas as pd
 import psutil
 import pyarrow as pa
@@ -145,11 +146,19 @@ class SimulationChunk:
     def create_sell_order(self, id, *args, **kwargs):
         return create_sell_order(self.simulations[id], *args, **kwargs)
 
-    def create_buy_orders(self, ids, *args, **kwargs):
-        return [create_buy_order(self.simulations[id], *args, **kwargs) for id in ids]
+    def create_buy_orders(self, params, timestamp_in_min):
+        return [
+            create_buy_order(self.simulations[id], timestamp, trigger, timestamp_in_min)
+            for (id, timestamp, trigger) in params
+        ]
 
-    def create_sell_orders(self, ids, *args, **kwargs):
-        return [create_sell_order(self.simulations[id], *args, **kwargs) for id in ids]
+    def create_sell_orders(self, params, timestamp_in_min):
+        return [
+            create_sell_order(
+                self.simulations[id], timestamp, trigger, timestamp_in_min
+            )
+            for (id, timestamp, trigger) in params
+        ]
 
 
 class SimulationEncyclopedia:
@@ -176,8 +185,7 @@ class SimulationEncyclopedia:
                 "buy_trigger_price": None,
                 "buy_time": None,
             }
-            chunk = self.chunks[chunk_idx]
-            self.simulation_chunks[id] = chunk
+            self.simulation_chunks[id] = chunk_idx
             self.by_entry.setdefault(val["entry_id"], set()).add(id)
             self.by_exit.setdefault(val["exit_id"], set()).add(id)
 
@@ -185,30 +193,30 @@ class SimulationEncyclopedia:
             chunk.set_simulations.remote(prechunks[chunk_idx])
 
     def get_simulation_chunk(self, id):
-        return self.simulation_chunks[id]
+        return self.chunks[self.simulation_chunks[id]]
 
-    def update_buys(self, buys: List[BuyOrder], timestamp_in_minutes):
-        # TODO: May need to collect "completed"
-        # and check for completions across all simulations before returning
-        is_future = None
-        for buy_future in buys:
-            if is_future is None:
-                is_future = isinstance(buy_future, concurrent.futures.Future)
-            timestamp, simId, trigger, *_ = (
-                buy_future.result() if is_future else buy_future
-            )
+    # def update_buys(self, buys: List[BuyOrder], timestamp_in_minutes):
+    #     # TODO: May need to collect "completed"
+    #     # and check for completions across all simulations before returning
+    #     is_future = None
+    #     for buy_future in buys:
+    #         if is_future is None:
+    #             is_future = isinstance(buy_future, concurrent.futures.Future)
+    #         timestamp, simId, trigger, *_ = (
+    #             buy_future.result() if is_future else buy_future
+    #         )
 
-            self.get_simulation_chunk(simId).update_buy.remote(
-                simId, trigger, timestamp_in_minutes
-            )
+    #         self.get_simulation_chunk(simId).update_buy.remote(
+    #             simId, trigger, timestamp_in_minutes
+    #         )
 
-    def update_sells(self, sells: List[SellOrder]):
-        is_future = None
-        for sell_future in sells:
-            if is_future is None:
-                is_future = isinstance(sell_future, concurrent.futures.Future)
-            timestamp, simId, *_ = sell_future.result() if is_future else sell_future
-            self.get_simulation_chunk(simId).update_sell.remote(simId)
+    # def update_sells(self, sells: List[SellOrder]):
+    #     is_future = None
+    #     for sell_future in sells:
+    #         if is_future is None:
+    #             is_future = isinstance(sell_future, concurrent.futures.Future)
+    #         timestamp, simId, *_ = sell_future.result() if is_future else sell_future
+    #         self.get_simulation_chunk(simId).update_sell.remote(simId)
 
     def create_orders(
         self,
@@ -220,30 +228,39 @@ class SimulationEncyclopedia:
         indicator_signal = indicator_signal.loc[indicator_signal["trigger"] != 0]
         # printd("Signal Indicated")
 
+        orders = dict()
         # Exit
         if is_exit:
+            for idx, timestamp, trigger, id in indicator_signal.itertuples():
+                for simId in self.by_exit.get(id):
+                    chunk = self.simulation_chunks[simId]
+                    orders[chunk] = orders.setdefault(chunk, list())
+                    orders[chunk].append((simId, timestamp, trigger))
+
             orders = [
-                self.get_simulation_chunk(simId)
-                .create_sell_order.remote(
-                    simId, timestamp, trigger, timestamp_in_minutes
-                )
+                self.chunks[chunk]
+                .create_sell_orders.remote(order_params, timestamp_in_minutes)
                 .future()
-                for idx, timestamp, trigger, id in indicator_signal.itertuples()
-                for simId in self.by_exit.get(id)
+                for chunk, order_params in orders.items()
             ]
+
         # Entry
         else:
+            for idx, timestamp, trigger, id in indicator_signal.itertuples():
+                for simId in self.by_entry.get(id):
+                    chunk = self.simulation_chunks[simId]
+                    orders[chunk] = orders.setdefault(chunk, list())
+                    orders[chunk].append((simId, timestamp, trigger))
+
+            orders = [
+                self.chunks[chunk]
+                .create_buy_orders.remote(order_params, timestamp_in_minutes)
+                .future()
+                for chunk, order_params in orders.items()
+            ]
+
             # sort simIds by chunk
             # then pass blocks to actor
-            orders = [
-                self.get_simulation_chunk(simId)
-                .create_buy_order.remote(
-                    simId, timestamp, trigger, timestamp_in_minutes
-                )
-                .future()
-                for idx, timestamp, trigger, id in indicator_signal.itertuples()
-                for simId in self.by_entry.get(id)
-            ]
         # printd("Simulations Found")
         # TODO: Verify that `done` does not contain any None/empty orders
         return concurrent.futures.as_completed(orders)
@@ -290,6 +307,13 @@ def main():
     sell_saver = OrderSaver("sell")
 
     printd("Preparing to loop-de-loop and pull")
+
+    # entries = ray.put(entries)
+    # exits = ray.put(exits)
+    # SAVE entries and exits to plasma store
+
+    # for chunk in encyclopedia.chunks:
+    #     chunk.main.remote(entries, exits)
 
     total_ticks = pd.to_datetime(endDate) - pd.to_datetime(startDate)
     total_ticks = total_ticks.total_seconds() / 60

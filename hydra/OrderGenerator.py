@@ -1,21 +1,22 @@
-from hydra.models import Direction
+import concurrent.futures
+import cProfile
 import pathlib
 from datetime import datetime
-import concurrent.futures
+import itertools
 from typing import Dict, List, NamedTuple, Set, Tuple, TypeVar
 
 import pandas as pd
+import psutil
 import pyarrow as pa
 import pyarrow.parquet as pq
-from tqdm import tqdm
-import psutil
 import ray
+from tqdm import tqdm
 
-from hydra.utils import now, printd, timeme
+from hydra.models import Direction
 from hydra.money import calculate_profit
+from hydra.utils import now, printd, timeme
 
-
-NUM_CHUNKS = psutil.cpu_count()
+NUM_CHUNKS = psutil.cpu_count(logical=False)
 current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
 pair = "XBTUSD"
 startDate = "2018-04-12"
@@ -69,43 +70,57 @@ class Simulation:
     # def __eq__(self, o: object) -> bool:
     #     return self.id == o.id
 
-    def get_profit(self, sell_trigger_price):
-        return calculate_profit(
-            self.buy_trigger_price,
-            sell_trigger_price,
-            buy_fee,
-            sell_fee,
+
+def get_profit(simulation, sell_trigger_price):
+    return calculate_profit(
+        simulation["buy_trigger_price"],
+        sell_trigger_price,
+        buy_fee,
+        sell_fee,
+    )
+
+
+def get_hold_time(simulation, sell_time):
+    return sell_time - simulation["buy_time"]
+
+
+def create_sell_order(simulation, timestamp, trigger, timestamp_in_minutes):
+    if simulation["open_position"] == Direction.BUY:
+        order = SellOrder(
+            timestamp,
+            simulation["id"],
+            trigger,
+            get_profit(simulation, trigger),
+            get_hold_time(simulation, timestamp_in_minutes),
         )
-
-    def get_hold_time(self, sell_time):
-        return sell_time - self.buy_time
-
-    def create_sell_order(self, timestamp, trigger, timestamp_in_minutes):
-        if self.open_position == Direction.BUY:
-            return SellOrder(
-                timestamp,
-                self.id,
-                trigger,
-                self.get_profit(trigger),
-                self.get_hold_time(timestamp_in_minutes),
-            )
-
-    def create_buy_order(self, timestamp, trigger):
-        if self.open_position == Direction.SELL:
-            return BuyOrder(timestamp, self.id, trigger)
-
-    def update_buy(self, trigger, timestamp_in_minutes):
-        self.open_position = True
-        self.buy_trigger_price = trigger
-        self.buy_time = timestamp_in_minutes
-
-    def update_sell(self):
-        self.open_position = False
-        self.buy_trigger_price = None
-        self.buy_time = None
+        simulation["open_position"] = False
+        simulation["buy_trigger_price"] = None
+        simulation["buy_time"] = None
+        return order
 
 
-@ray.remote
+def create_buy_order(simulation, timestamp, trigger, timestamp_in_minutes):
+    if simulation["open_position"] == Direction.SELL:
+        order = BuyOrder(timestamp, simulation["id"], trigger)
+        simulation["open_position"] = True
+        simulation["buy_trigger_price"] = trigger
+        simulation["buy_time"] = timestamp_in_minutes
+        return order
+
+
+# def update_buy(simulation, trigger, timestamp_in_minutes):
+#     simulation["open_position"] = True
+#     simulation["buy_trigger_price"] = trigger
+#     simulation["buy_time"] = timestamp_in_minutes
+
+
+# def update_sell(simulation):
+#     simulation["open_position"] = False
+#     simulation["buy_trigger_price"] = None
+#     simulation["buy_time"] = None
+
+
+@ray.remote(num_gpus=0)
 class SimulationChunk:
     simulations: Dict[int, Simulation]
 
@@ -113,19 +128,28 @@ class SimulationChunk:
         self.simulations = dict()
 
     def add_simulation(self, simulation):
-        self.simulations[simulation.id] = simulation
+        self.simulations[simulation["id"]] = simulation
 
-    def update_buy(self, id, *args, **kwargs):
-        return self.simulations[id].update_buy(*args, **kwargs)
+    def set_simulations(self, simulations):
+        self.simulations = simulations
 
-    def update_sell(self, id, *args, **kwargs):
-        return self.simulations[id].update_sell(*args, **kwargs)
+    # def update_buy(self, id, *args, **kwargs):
+    #     return update_buy(self.simulations[id], *args, **kwargs)
+
+    # def update_sell(self, id, *args, **kwargs):
+    #     return update_sell(self.simulations[id], *args, **kwargs)
 
     def create_buy_order(self, id, *args, **kwargs):
-        return self.simulations[id].create_buy_order(*args, **kwargs)
+        return create_buy_order(self.simulations[id], *args, **kwargs)
 
     def create_sell_order(self, id, *args, **kwargs):
-        return self.simulations[id].create_sell_order(*args, **kwargs)
+        return create_sell_order(self.simulations[id], *args, **kwargs)
+
+    def create_buy_orders(self, ids, *args, **kwargs):
+        return [create_buy_order(self.simulations[id], *args, **kwargs) for id in ids]
+
+    def create_sell_orders(self, ids, *args, **kwargs):
+        return [create_sell_order(self.simulations[id], *args, **kwargs) for id in ids]
 
 
 class SimulationEncyclopedia:
@@ -141,12 +165,24 @@ class SimulationEncyclopedia:
 
         self.chunks = [SimulationChunk.remote() for chunk in range(NUM_CHUNKS)]
 
-        for idx, (id, val) in enumerate(simulations.items()):
-            chunk = self.chunks[idx % NUM_CHUNKS]
-            chunk.add_simulation.remote(Simulation(id, val["entry_id"], val["exit_id"]))
+        prechunks = [dict() for chunk in range(NUM_CHUNKS)]
+        for idx, (id, val) in enumerate(tqdm(simulations.items())):
+            chunk_idx = idx % NUM_CHUNKS
+            prechunks[chunk_idx][id] = {
+                "id": id,
+                "entry_id": val["entry_id"],
+                "exit_id": val["exit_id"],
+                "open_position": False,
+                "buy_trigger_price": None,
+                "buy_time": None,
+            }
+            chunk = self.chunks[chunk_idx]
             self.simulation_chunks[id] = chunk
             self.by_entry.setdefault(val["entry_id"], set()).add(id)
             self.by_exit.setdefault(val["exit_id"], set()).add(id)
+
+        for chunk_idx, chunk in enumerate(tqdm(self.chunks)):
+            chunk.set_simulations.remote(prechunks[chunk_idx])
 
     def get_simulation_chunk(self, id):
         return self.simulation_chunks[id]
@@ -154,13 +190,24 @@ class SimulationEncyclopedia:
     def update_buys(self, buys: List[BuyOrder], timestamp_in_minutes):
         # TODO: May need to collect "completed"
         # and check for completions across all simulations before returning
-        for timestamp, simId, trigger, *_ in buys:
+        is_future = None
+        for buy_future in buys:
+            if is_future is None:
+                is_future = isinstance(buy_future, concurrent.futures.Future)
+            timestamp, simId, trigger, *_ = (
+                buy_future.result() if is_future else buy_future
+            )
+
             self.get_simulation_chunk(simId).update_buy.remote(
                 simId, trigger, timestamp_in_minutes
             )
 
     def update_sells(self, sells: List[SellOrder]):
-        for timestamp, simId, *_ in sells:
+        is_future = None
+        for sell_future in sells:
+            if is_future is None:
+                is_future = isinstance(sell_future, concurrent.futures.Future)
+            timestamp, simId, *_ = sell_future.result() if is_future else sell_future
             self.get_simulation_chunk(simId).update_sell.remote(simId)
 
     def create_orders(
@@ -178,7 +225,7 @@ class SimulationEncyclopedia:
             orders = [
                 self.get_simulation_chunk(simId)
                 .create_sell_order.remote(
-                    simId, timestamp, trigger, timestamp_in_minutes, is_exit
+                    simId, timestamp, trigger, timestamp_in_minutes
                 )
                 .future()
                 for idx, timestamp, trigger, id in indicator_signal.itertuples()
@@ -186,22 +233,25 @@ class SimulationEncyclopedia:
             ]
         # Entry
         else:
+            # sort simIds by chunk
+            # then pass blocks to actor
             orders = [
                 self.get_simulation_chunk(simId)
-                .create_buy_order.remote(simId, timestamp, trigger)
+                .create_buy_order.remote(
+                    simId, timestamp, trigger, timestamp_in_minutes
+                )
                 .future()
                 for idx, timestamp, trigger, id in indicator_signal.itertuples()
                 for simId in self.by_entry.get(id)
             ]
         # printd("Simulations Found")
-        # printd("Simulating Desire")
         # TODO: Verify that `done` does not contain any None/empty orders
-        done, not_done = concurrent.futures.wait(orders)
-        return done
+        return concurrent.futures.as_completed(orders)
 
 
 @timeme
-def main(pair, startDate, endDate, reference_time):
+def main():
+    # pair, startDate, endDate, reference_time
     printd("Loading Ids")
     output_dir = pathlib.Path.cwd().joinpath("output", pair)
     entry_ids = load_output_signal(output_dir, reference_time, "aroon_entries.ids")
@@ -301,13 +351,13 @@ def main(pair, startDate, endDate, reference_time):
                 )
 
                 # pbar.write(f"[{now()}] Filtering Orders")
-                buys, sells = filter_orders(buys, sells)
+                # buys, sells = filter_orders(buys, sells)
 
                 # pbar.write(f"[{now()}] Updating Simulations")
-                encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
-                orders["buy"] += buys
-                encyclopedia.update_sells(sells)
-                orders["sell"] += sells
+                # encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
+                orders["buy"].append(buys)
+                # encyclopedia.update_sells(sells)
+                orders["sell"].append(sells)
 
                 next_entry_timestamp, next_entry_df = next(entries, (None, None))
                 next_exit_timestamp, next_exit_df = next(exits, (None, None))
@@ -324,8 +374,8 @@ def main(pair, startDate, endDate, reference_time):
                     next_entry_df, timestamp_in_minutes_entry, False
                 )
                 # pbar.write(f"[{now()}] Updating Simulations")
-                encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
-                orders["buy"] += buys
+                # encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
+                orders["buy"].append(buys)
 
                 next_entry_timestamp, next_entry_df = next(entries, (None, None))
             # if entries finish before exits, keep doing exits
@@ -345,8 +395,8 @@ def main(pair, startDate, endDate, reference_time):
                     next_exit_df, timestamp_in_minutes_exit, True
                 )
                 # pbar.write(f"[{now()}] Updating Simulations")
-                encyclopedia.update_sells(sells)
-                orders["sell"] += sells
+                # encyclopedia.update_sells(sells)
+                orders["sell"].append(sells)
 
                 next_exit_timestamp, next_exit_df = next(exits, (None, None))
 
@@ -372,7 +422,13 @@ class OrderSaver:
         pbar.set_description(f"[{now()}] Saving {last_timestamp.date()}")
 
         filename = f"day={last_timestamp.day}"
-        order_df = pd.DataFrame.from_records(orders[self.type], columns=self.columns)
+        order_df = pd.DataFrame.from_records(
+            [
+                order.result()
+                for order in itertools.chain.from_iterable(orders[self.type])
+            ],
+            columns=self.columns,
+        )
         table = pa.Table.from_pandas(order_df)
 
         path = (
@@ -415,18 +471,24 @@ def flatten(object):
 
 
 def filter_orders(buys, sells) -> Tuple[List[BuyOrder], List[SellOrder]]:
-    buysims = {simId for timestamp, simId, trigger in buys}
-    sellsims = {simId for timestamp, simId, *_ in sells}
-    both = buysims & sellsims
+    buy_orders = {
+        order for buy_future in buys if (order := buy_future.result()) is not None
+    }
+    sell_orders = {
+        order for sell_future in sells if (order := sell_future.result()) is not None
+    }
+    both = {order[1] for order in buy_orders} & {order[1] for order in sell_orders}
 
-    return [buy for buy in buys if buy[1] not in both], [
-        sell for sell in sells if sell[1] not in both
-    ]
+    return (
+        [buy for buy in buy_orders if buy[1] not in both],
+        [sell for sell in sell_orders if sell[1] not in both],
+    )
 
 
 if __name__ == "__main__":
     try:
-        ray.init()
-        main(pair, startDate, endDate, reference_time)
+        ray.init(include_dashboard=False)
+        cProfile.run("main()")
+        # main()
     finally:
         ray.shutdown()

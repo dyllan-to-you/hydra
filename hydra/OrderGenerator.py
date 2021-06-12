@@ -1,8 +1,12 @@
+import traceback
+import sys
+import os
 import concurrent.futures
 import cProfile
-import pathlib
-from datetime import datetime
 import itertools
+import pathlib
+from datetime import datetime, timedelta
+from operator import itemgetter
 from typing import Dict, List, NamedTuple, Set, Tuple, TypeVar
 
 import numpy as np
@@ -20,14 +24,16 @@ from hydra.utils import now, printd, timeme
 NUM_CHUNKS = psutil.cpu_count(logical=False)
 current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
 pair = "XBTUSD"
-startDate = "2018-04-12"
-endDate = "2021-01-01"
+startDate = pd.to_datetime("2018-04-12")
+endDate = pd.to_datetime("2021-01-01")
 reference_time = "2021-05-20T1919"
 fee = 0.001
 buy_fee = 1 + fee
 sell_fee = 1 - fee
 project_dir = pathlib.Path(__file__).absolute().parent.parent
 saved_order_dir = project_dir / "output" / pair / "orders"
+
+print(psutil.virtual_memory().percent)
 
 
 class BuyOrder(NamedTuple):
@@ -53,7 +59,7 @@ class Simulation:
     id: int
     entry_id: int
     exit_id: int
-    open_position: bool
+    last_order: bool
     buy_trigger_price: float
     buy_time: datetime
 
@@ -61,20 +67,20 @@ class Simulation:
         self.id = id
         self.entry_id = entry_id
         self.exit_id = exit_id
-        self.open_position = False
+        self.last_order = False
         self.buy_trigger_price = None
         self.buy_time = None
 
-    # def __hash__(self) -> int:
-    #     return self.id
+    def __hash__(self) -> int:
+        return self.id
 
-    # def __eq__(self, o: object) -> bool:
-    #     return self.id == o.id
+    def __eq__(self, o: object) -> bool:
+        return self.id == o.id
 
 
 def get_profit(simulation, sell_trigger_price):
     return calculate_profit(
-        simulation["buy_trigger_price"],
+        simulation.buy_trigger_price,
         sell_trigger_price,
         buy_fee,
         sell_fee,
@@ -82,57 +88,79 @@ def get_profit(simulation, sell_trigger_price):
 
 
 def get_hold_time(simulation, sell_time):
-    return sell_time - simulation["buy_time"]
+    return sell_time - simulation.buy_time
 
 
 def create_sell_order(simulation, timestamp, trigger, timestamp_in_minutes):
-    if simulation["open_position"] == Direction.BUY:
-        order = SellOrder(
-            timestamp,
-            simulation["id"],
-            trigger,
-            get_profit(simulation, trigger),
-            get_hold_time(simulation, timestamp_in_minutes),
-        )
-        simulation["open_position"] = False
-        simulation["buy_trigger_price"] = None
-        simulation["buy_time"] = None
-        return order
+    order = SellOrder(
+        timestamp,
+        simulation.id,
+        trigger,
+        get_profit(simulation, trigger),
+        get_hold_time(simulation, timestamp_in_minutes),
+    )
+    simulation.last_order = False
+    simulation.buy_trigger_price = None
+    simulation.buy_time = None
+    return order
 
 
 def create_buy_order(simulation, timestamp, trigger, timestamp_in_minutes):
-    if simulation["open_position"] == Direction.SELL:
-        order = BuyOrder(timestamp, simulation["id"], trigger)
-        simulation["open_position"] = True
-        simulation["buy_trigger_price"] = trigger
-        simulation["buy_time"] = timestamp_in_minutes
-        return order
+    order = BuyOrder(timestamp, simulation.id, trigger)
+    simulation.last_order = True
+    simulation.buy_trigger_price = trigger
+    simulation.buy_time = timestamp_in_minutes
+    return order
 
 
 # def update_buy(simulation, trigger, timestamp_in_minutes):
-#     simulation["open_position"] = True
-#     simulation["buy_trigger_price"] = trigger
-#     simulation["buy_time"] = timestamp_in_minutes
+#     simulation.last_order = True
+#     simulation.buy_trigger_price = trigger
+#     simulation.buy_time = timestamp_in_minutes
 
 
 # def update_sell(simulation):
-#     simulation["open_position"] = False
-#     simulation["buy_trigger_price"] = None
-#     simulation["buy_time"] = None
+#     simulation.last_order = False
+#     simulation.buy_trigger_price = None
+#     simulation.buy_time = None
 
 
 @ray.remote(num_gpus=0)
 class SimulationChunk:
+    id: int
     simulations: Dict[int, Simulation]
+    simulations_by_entry: Dict[int, Simulation]
+    simulations_by_exit: Dict[int, Simulation]
 
-    def __init__(self):
-        self.simulations = dict()
+    entry_timestamp_minutes: int
+    exit_timestamp_minutes: int
 
-    def add_simulation(self, simulation):
-        self.simulations[simulation["id"]] = simulation
+    def __init__(self, id, simulations):
+        self.id = id
+        self.simulations = dict.fromkeys(set(simulations.keys()))
+        self.simulations_by_entry = {}  # dict.fromkeys(set(entries))
+        self.simulations_by_exit = {}  # dict.fromkeys(set(exits))
 
-    def set_simulations(self, simulations):
-        self.simulations = simulations
+        self.startDate = startDate
+
+        self.entry_timestamp_minute = 0
+        self.exit_timestamp_minutes = 0
+
+        self.next_entry = None
+        self.next_exit = None
+        for (id, val) in simulations.to_dict("index").items():
+            # sim = {
+            #     "id": id,
+            #     "entry_id": val["entry_id"],
+            #     "exit_id": val["exit_id"],
+            #     "last_order": False,
+            #     "buy_trigger_price": None,
+            #     "buy_time": None,
+            # }
+            sim = Simulation(id, val["entry_id"], val["exit_id"])
+            self.simulations[id] = sim
+            self.simulations_by_entry.setdefault(val["entry_id"], set()).add(sim)
+            self.simulations_by_exit.setdefault(val["exit_id"], set()).add(sim)
 
     # def update_buy(self, id, *args, **kwargs):
     #     return update_buy(self.simulations[id], *args, **kwargs)
@@ -140,83 +168,68 @@ class SimulationChunk:
     # def update_sell(self, id, *args, **kwargs):
     #     return update_sell(self.simulations[id], *args, **kwargs)
 
-    def create_buy_order(self, id, *args, **kwargs):
-        return create_buy_order(self.simulations[id], *args, **kwargs)
+    def simulate_day(self, entries, exits, date):
 
-    def create_sell_order(self, id, *args, **kwargs):
-        return create_sell_order(self.simulations[id], *args, **kwargs)
+        self.entries = entries.__iter__()
+        self.exits = exits.groupby("timestamp").__iter__()
 
-    def create_buy_orders(self, params, timestamp_in_min):
-        return [
-            create_buy_order(self.simulations[id], timestamp, trigger, timestamp_in_min)
-            for (id, timestamp, trigger) in params
-        ]
+        next_entry = next(self.entries)
+        next_exit = next(self.exits)
 
-    def create_sell_orders(self, params, timestamp_in_min):
-        return [
-            create_sell_order(
-                self.simulations[id], timestamp, trigger, timestamp_in_min
-            )
-            for (id, timestamp, trigger) in params
-        ]
+        buys = []
+        sells = []
 
+        # print(date.day)
+        # print(next_entry[0].day)
+        # print(next_exit[0].day)
+        while (next_entry[0] is not None and date.day == next_entry[0].day) or (
+            next_exit[0] is not None and date.day == next_exit[0].day
+        ):
+            next_entry_timestamp, next_entry_df = next_entry
+            if next_entry_timestamp is not None:
+                timestamp_in_minutes_entry = (
+                    next_entry_timestamp - self.startDate
+                ).total_seconds() / 60
 
-class SimulationEncyclopedia:
-    chunks: List[SimulationChunk]
-    simulation_chunks: Dict[int, SimulationChunk]
-    by_entry: Dict[int, Set[int]]
-    by_exit: Dict[int, Set[int]]
+            next_exit_timestamp, next_exit_df = next_exit
+            if next_exit_timestamp is not None:
+                timestamp_in_minutes_exit = (
+                    next_exit_timestamp - self.startDate
+                ).total_seconds() / 60
 
-    def __init__(self, simulations: Dict[int, Dict]):
-        self.by_entry = {}  # dict.fromkeys(set(entries))
-        self.by_exit = {}  # dict.fromkeys(set(exits))
-        self.simulation_chunks = dict.fromkeys(set(simulations.keys()))
+            # If exits finish abort
+            if next_exit_timestamp is None:
+                break  # TODO: return some indicator that we are all out of dates/times?
+            elif next_entry_timestamp == next_exit_timestamp:
+                sells += self.create_orders(
+                    next_exit_df, timestamp_in_minutes_exit, True
+                )
+                buys += self.create_orders(
+                    next_entry_df, timestamp_in_minutes_entry, False
+                )
 
-        self.chunks = [SimulationChunk.remote() for chunk in range(NUM_CHUNKS)]
+                next_entry = next(self.entries, (None, None))
+                next_exit = next(self.exits, (None, None))
+            # if entries finish before exits, keep doing exits
+            elif (
+                next_entry_timestamp is None
+                or next_exit_timestamp < next_entry_timestamp
+            ):
+                sells += self.create_orders(
+                    next_exit_df, timestamp_in_minutes_exit, True
+                )
+                # encyclopedia.update_sells(sells)
 
-        prechunks = [dict() for chunk in range(NUM_CHUNKS)]
-        for idx, (id, val) in enumerate(tqdm(simulations.items())):
-            chunk_idx = idx % NUM_CHUNKS
-            prechunks[chunk_idx][id] = {
-                "id": id,
-                "entry_id": val["entry_id"],
-                "exit_id": val["exit_id"],
-                "open_position": False,
-                "buy_trigger_price": None,
-                "buy_time": None,
-            }
-            self.simulation_chunks[id] = chunk_idx
-            self.by_entry.setdefault(val["entry_id"], set()).add(id)
-            self.by_exit.setdefault(val["exit_id"], set()).add(id)
+                next_exit = next(self.exits, (None, None))
+            elif next_entry_timestamp < next_exit_timestamp:
+                buys = self.create_orders(
+                    next_entry_df, timestamp_in_minutes_entry, False
+                )
+                # encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
 
-        for chunk_idx, chunk in enumerate(tqdm(self.chunks)):
-            chunk.set_simulations.remote(prechunks[chunk_idx])
+                next_entry = next(self.entries, (None, None))
 
-    def get_simulation_chunk(self, id):
-        return self.chunks[self.simulation_chunks[id]]
-
-    # def update_buys(self, buys: List[BuyOrder], timestamp_in_minutes):
-    #     # TODO: May need to collect "completed"
-    #     # and check for completions across all simulations before returning
-    #     is_future = None
-    #     for buy_future in buys:
-    #         if is_future is None:
-    #             is_future = isinstance(buy_future, concurrent.futures.Future)
-    #         timestamp, simId, trigger, *_ = (
-    #             buy_future.result() if is_future else buy_future
-    #         )
-
-    #         self.get_simulation_chunk(simId).update_buy.remote(
-    #             simId, trigger, timestamp_in_minutes
-    #         )
-
-    # def update_sells(self, sells: List[SellOrder]):
-    #     is_future = None
-    #     for sell_future in sells:
-    #         if is_future is None:
-    #             is_future = isinstance(sell_future, concurrent.futures.Future)
-    #         timestamp, simId, *_ = sell_future.result() if is_future else sell_future
-    #         self.get_simulation_chunk(simId).update_sell.remote(simId)
+        return buys, sells
 
     def create_orders(
         self,
@@ -224,82 +237,66 @@ class SimulationEncyclopedia:
         timestamp_in_minutes,
         is_exit,
     ) -> List[TypeVar("Order", BuyOrder, SellOrder)]:
-        # printd("Creating order", is_exit)
         indicator_signal = indicator_signal.loc[indicator_signal["trigger"] != 0]
-        # printd("Signal Indicated")
-
-        orders = dict()
-        # Exit
         if is_exit:
-            for idx, timestamp, trigger, id in indicator_signal.itertuples():
-                for simId in self.by_exit.get(id):
-                    chunk = self.simulation_chunks[simId]
-                    orders[chunk] = orders.setdefault(chunk, list())
-                    orders[chunk].append((simId, timestamp, trigger))
-
-            orders = [
-                self.chunks[chunk]
-                .create_sell_orders.remote(order_params, timestamp_in_minutes)
-                .future()
-                for chunk, order_params in orders.items()
+            return [
+                create_sell_order(sim, timestamp, trigger, timestamp_in_minutes)
+                for idx, timestamp, trigger, id in indicator_signal.itertuples()
+                for sim in self.simulations_by_exit.get(id)
+                if sim.last_order == Direction.BUY
             ]
 
-        # Entry
         else:
-            for idx, timestamp, trigger, id in indicator_signal.itertuples():
-                for simId in self.by_entry.get(id):
-                    chunk = self.simulation_chunks[simId]
-                    orders[chunk] = orders.setdefault(chunk, list())
-                    orders[chunk].append((simId, timestamp, trigger))
-
-            orders = [
-                self.chunks[chunk]
-                .create_buy_orders.remote(order_params, timestamp_in_minutes)
-                .future()
-                for chunk, order_params in orders.items()
+            return [
+                create_buy_order(sim, timestamp, trigger, timestamp_in_minutes)
+                for idx, timestamp, trigger, id in indicator_signal.itertuples()
+                for sim in self.simulations_by_entry.get(id)
+                if sim.last_order == Direction.SELL
             ]
-
-            # sort simIds by chunk
-            # then pass blocks to actor
-        # printd("Simulations Found")
-        # TODO: Verify that `done` does not contain any None/empty orders
-        return concurrent.futures.as_completed(orders)
 
 
 @timeme
 def main():
     # pair, startDate, endDate, reference_time
-    printd("Loading Ids")
-    output_dir = pathlib.Path.cwd().joinpath("output", pair)
-    entry_ids = load_output_signal(output_dir, reference_time, "aroon_entries.ids")
-    exit_ids = load_output_signal(output_dir, reference_time, "aroon_exits.ids")
+    # printd("Loading Ids")
+    output_dir = project_dir / "output" / pair
+    # entry_ids = load_output_signal(output_dir, reference_time, "aroon_entries.ids")
+    # exit_ids = load_output_signal(output_dir, reference_time, "aroon_exits.ids")
 
-    printd("Preparing Simulations")
-    simulations_df = pd.DataFrame(
-        index=pd.MultiIndex.from_product(
-            [entry_ids["id"], exit_ids["id"]], names=["entry_id", "exit_id"]
-        )
-    )
-    simulations_df = simulations_df.reset_index()
-    simulations_dick = simulations_df.to_dict("index")
-
-    printd("Initializing Simulations")
-    encyclopedia = SimulationEncyclopedia(simulations_dick)
-    del simulations_df
-    del simulations_dick
     printd("Loading Entries")
     entries = (
         load_output_signal(output_dir, reference_time, "aroon_entries")
         # .set_index("timestamp", "id")
     )
-    entries = entries.groupby("timestamp")
+    entry_ids = entries["id"].unique()
+    entries = entries.groupby(entries["timestamp"].dt.date)
+    # for date, daily_entry in entries:
+    #    todays_entry = daily_entry.groupby("timestamp")
+    #    todays_entry = todays_entry.__iter__()
+    #    next_entry_timestamp, next_entry_df = next(todays_entry)
 
     printd("Loading Exits")
     exits = (
         load_output_signal(output_dir, reference_time, "aroon_exits")
         # .set_index("timestamp", "id")
     )
-    exits = exits.groupby("timestamp")
+
+    exit_ids = exits["id"].unique()
+    exits = exits.groupby(exits["timestamp"].dt.date)
+
+    printd("Preparing Simulations")
+    simulations_df = pd.DataFrame(
+        index=pd.MultiIndex.from_product(
+            [entry_ids, exit_ids], names=["entry_id", "exit_id"]
+        )
+    )
+    simulations_df = simulations_df.reset_index()
+    simulations_df["chunk"] = simulations_df["exit_id"] % NUM_CHUNKS
+    simulations_df = simulations_df.groupby("chunk")
+
+    actor_chunks = {}
+    for (sim_chunk, simulation) in tqdm(simulations_df, total=NUM_CHUNKS):
+        actor_chunks[sim_chunk] = SimulationChunk.remote(sim_chunk, simulation)
 
     orders = {"buy": [], "sell": []}
 
@@ -308,121 +305,59 @@ def main():
 
     printd("Preparing to loop-de-loop and pull")
 
-    # entries = ray.put(entries)
-    # exits = ray.put(exits)
-    # SAVE entries and exits to plasma store
-
-    # for chunk in encyclopedia.chunks:
-    #     chunk.main.remote(entries, exits)
-
-    total_ticks = pd.to_datetime(endDate) - pd.to_datetime(startDate)
-    total_ticks = total_ticks.total_seconds() / 60
-    with tqdm(total=total_ticks, unit="tick", smoothing=0) as pbar:
+    total_days = endDate - startDate
+    total_days = total_days.total_seconds() / 60 / 60 / 24
+    with tqdm(total=total_days, unit="day", smoothing=0) as pbar:
+        current_day = startDate
         entries = entries.__iter__()
         exits = exits.__iter__()
-        next_entry_timestamp, next_entry_df = next(entries)
-        next_exit_timestamp, next_exit_df = next(exits)
-        last_entry_timestamp = next_entry_timestamp
-        last_exit_timestamp = next_exit_timestamp
-        # pbar.update(2)
-        start_time_entry = next_entry_timestamp
-        start_time_exit = next_exit_timestamp
-        timestamp_in_minutes_entry = 0
-        timestamp_in_minutes_exit = 0
-        while True:
-            # pbar.write(f"{next_entry_timestamp}, {next_exit_timestamp}")
-            next_time_entry = next_entry_timestamp
-            time_delta = (next_time_entry - start_time_entry).total_seconds() / 60
-            pbar.update(time_delta)
-            timestamp_in_minutes_entry += time_delta
-            start_time_entry = next_time_entry
+        entries_day, entries_day_df = next(entries)
+        exits_day, exits_day_df = next(exits)
+        while current_day < endDate:
+            pbar.set_description(str(current_day))
+            pbar.write(f"{current_day=} {entries_day=} {exits_day=}")
+            while entries_day < current_day:
+                entries_day, entries_day_df = next(entries)
+            while exits_day < current_day:
+                exits_day, exits_day_df = next(exits)
 
-            next_time_exit = next_exit_timestamp
-            time_delta = (next_time_exit - start_time_exit).total_seconds() / 60
-            timestamp_in_minutes_exit += time_delta
-            start_time_exit = next_time_exit
-            # snappy: 15:07
-            # brotli2 / 10 counts: 15:37 (half the space)
-            # brotli2 / 100 counts: 15:08
-            # brotli2 / 360 counts: 15:06
-            # brotli2 / 750 counts: 15:26
-            # brotli2 / 1440 counts: 15:04
+            chunked_exits_day_df = exits_day_df.groupby(exits_day_df["id"] % NUM_CHUNKS)
 
-            # If exits finish abort
-            if next_exit_timestamp is None:
-                break
-            elif next_entry_timestamp == next_exit_timestamp:
-                # pbar.write(f"[{now()}] Tiedstamp")
-                last_entry_timestamp = buy_saver.save_orders(
-                    orders,
-                    last_entry_timestamp,
-                    next_entry_timestamp,
-                    pbar,
-                )
-                last_exit_timestamp = sell_saver.save_orders(
-                    orders,
-                    last_exit_timestamp,
-                    next_exit_timestamp,
-                    pbar,
-                )
+            entries_ref = ray.put(entries_day_df.groupby("timestamp"))  # of current day
+            order_futures = [
+                actor_chunks[actor_id]
+                .simulate_day.remote(entries_ref, chunked_exit, current_day)
+                .future()
+                for actor_id, chunked_exit in chunked_exits_day_df
+            ]
 
-                # pbar.write(f"[{now()}] Creating Orders")
-                sells = encyclopedia.create_orders(
-                    next_exit_df, timestamp_in_minutes_exit, True
-                )
-                buys = encyclopedia.create_orders(
-                    next_entry_df, timestamp_in_minutes_entry, False
-                )
+            buys = []
+            sells = []
 
-                # pbar.write(f"[{now()}] Filtering Orders")
-                # buys, sells = filter_orders(buys, sells)
+            for future in concurrent.futures.as_completed(order_futures):
+                buy, sell = future.result()
+                # TODO: Sort buys and sells
+                buys += buy
+                sells += sell
+                pbar.update(1 / (NUM_CHUNKS * 2))
 
-                # pbar.write(f"[{now()}] Updating Simulations")
-                # encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
-                orders["buy"].append(buys)
-                # encyclopedia.update_sells(sells)
-                orders["sell"].append(sells)
+            # print(buys, sells)
 
-                next_entry_timestamp, next_entry_df = next(entries, (None, None))
-                next_exit_timestamp, next_exit_df = next(exits, (None, None))
-            elif next_entry_timestamp < next_exit_timestamp:
-                # pbar.write(f"[{now()}] Lagging Entry")
-                last_entry_timestamp = buy_saver.save_orders(
-                    orders,
-                    last_entry_timestamp,
-                    next_entry_timestamp,
-                    pbar,
-                )
-                # pbar.write(f"[{now()}] Creating Orders")
-                buys = encyclopedia.create_orders(
-                    next_entry_df, timestamp_in_minutes_entry, False
-                )
-                # pbar.write(f"[{now()}] Updating Simulations")
-                # encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
-                orders["buy"].append(buys)
+            buy_saver.save_orders(
+                buys,
+                current_day,
+                pbar,
+            )
+            pbar.update(0.25)
+            sell_saver.save_orders(
+                sells,
+                current_day,
+                pbar,
+            )
 
-                next_entry_timestamp, next_entry_df = next(entries, (None, None))
-            # if entries finish before exits, keep doing exits
-            elif (
-                next_entry_timestamp is None
-                or next_exit_timestamp < next_entry_timestamp
-            ):
-                # pbar.write(f"[{now()}] Lagging Exit")
-                last_exit_timestamp = sell_saver.save_orders(
-                    orders,
-                    last_exit_timestamp,
-                    next_exit_timestamp,
-                    pbar,
-                )
-                # pbar.write(f"[{now()}] Creating Orders")
-                sells = encyclopedia.create_orders(
-                    next_exit_df, timestamp_in_minutes_exit, True
-                )
-                # pbar.write(f"[{now()}] Updating Simulations")
-                # encyclopedia.update_sells(sells)
-                orders["sell"].append(sells)
-
-                next_exit_timestamp, next_exit_df = next(exits, (None, None))
+            pbar.update(0.25)
+            current_day += timedelta(days=1)
+            # pbar.write(f"Moving onto day {current_day}")
 
 
 class OrderSaver:
@@ -435,36 +370,34 @@ class OrderSaver:
         self.lastname = None
         self.writer = None
 
-    def save_orders(self, orders, last_timestamp, next_timestamp, pbar):
-        if (
-            last_timestamp.day == next_timestamp.day
-            or len(orders[self.type]) == 0
-            # or counter % 360 == 0
-        ):
-            return last_timestamp
+    def save_orders(self, orders, timestamp, pbar):
+        # if (
+        #     last_timestamp.day == next_timestamp.day
+        #     or len(orders[self.type]) == 0
+        #     # or counter % 360 == 0
+        # ):
+        #     return last_timestamp
 
-        pbar.set_description(f"[{now()}] Saving {last_timestamp.date()}")
+        pbar.set_description(f"[{now()}] Saving {timestamp.date()}")
 
-        filename = f"day={last_timestamp.day}"
+        filename = f"day={timestamp.day}"
         order_df = pd.DataFrame.from_records(
-            [
-                order.result()
-                for order in itertools.chain.from_iterable(orders[self.type])
-            ],
+            [order for order in orders],
             columns=self.columns,
         )
+        order_df.sort_values("timestamp", axis=0, kind="mergesort", inplace=True)
         table = pa.Table.from_pandas(order_df)
 
         path = (
             saved_order_dir
             / f"order {current_time} fee={fee}"
-            / f"year={last_timestamp.year}"
-            / f"month={last_timestamp.month}"
+            / f"year={timestamp.year}"
+            / f"month={timestamp.month}"
         )
 
+        # pbar.write(self.type, order_df)
         if not path.exists():
             path.mkdir(parents=True)
-
         if self.lastname is None or filename != self.lastname:
             if self.writer is not None:
                 self.writer.close()
@@ -477,10 +410,10 @@ class OrderSaver:
             )
 
         self.writer.write_table(table)
-        pbar.set_description(f"[{now()}] Saved {last_timestamp.date()}")
-        last_timestamp = next_timestamp
-        orders[self.type] = []
-        return last_timestamp
+        pbar.set_description(f"[{now()}] Saved {timestamp.date()}")
+        # timestamp = next_timestamp
+        # orders[self.type] = []
+        # return timestamp
 
 
 idx = pd.IndexSlice
@@ -511,8 +444,17 @@ def filter_orders(buys, sells) -> Tuple[List[BuyOrder], List[SellOrder]]:
 
 if __name__ == "__main__":
     try:
-        ray.init(include_dashboard=False)
-        cProfile.run("main()")
-        # main()
+        ray.init(include_dashboard=False, local_mode=False)
+        # cProfile.run("main()")
+        main()
+    except KeyboardInterrupt:
+        print("Interrupted")
+    except Exception as e:
+        traceback.print_tb(e.__traceback__)
+        print(e)
     finally:
         ray.shutdown()
+        try:
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)

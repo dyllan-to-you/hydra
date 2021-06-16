@@ -21,10 +21,10 @@ from hydra.models import Direction
 from hydra.money import calculate_profit
 from hydra.utils import now, printd, timeme
 
-NUM_CHUNKS = psutil.cpu_count(logical=False)
+NUM_CHUNKS = psutil.cpu_count(logical=True)
 current_time = datetime.now().strftime("%Y-%m-%dT%H%M")
 pair = "XBTUSD"
-startDate = pd.to_datetime("2018-04-12")
+startDate = pd.to_datetime("2017-01-01")
 endDate = pd.to_datetime("2021-01-01")
 reference_time = "2021-05-20T1919"
 fee = 0.001
@@ -168,7 +168,9 @@ class SimulationChunk:
     # def update_sell(self, id, *args, **kwargs):
     #     return update_sell(self.simulations[id], *args, **kwargs)
 
-    def simulate_day(self, entries, exits, date):
+    def simulate_day(self, entries, exits, date, actor_id):
+        buy_saver = OrderSaver("buy")
+        sell_saver = OrderSaver("sell")
 
         self.entries = entries.__iter__()
         self.exits = exits.groupby("timestamp").__iter__()
@@ -229,7 +231,11 @@ class SimulationChunk:
 
                 next_entry = next(self.entries, (None, None))
 
-        return buys, sells
+        buy_saver.save_orders(buys, date, actor_id)
+
+        sell_saver.save_orders(sells, date, actor_id)
+
+        return None
 
     def create_orders(
         self,
@@ -307,6 +313,7 @@ def main():
 
     total_days = endDate - startDate
     total_days = total_days.total_seconds() / 60 / 60 / 24
+    order_futures_list = []
     with tqdm(total=total_days, unit="day", smoothing=0) as pbar:
         current_day = startDate
         entries = entries.__iter__()
@@ -314,8 +321,8 @@ def main():
         entries_day, entries_day_df = next(entries)
         exits_day, exits_day_df = next(exits)
         while current_day < endDate:
-            pbar.set_description(str(current_day))
-            pbar.write(f"{current_day=} {entries_day=} {exits_day=}")
+            # pbar.set_description(str(current_day))
+            # pbar.write(f"{current_day=} {entries_day=} {exits_day=}")
             while entries_day < current_day:
                 entries_day, entries_day_df = next(entries)
             while exits_day < current_day:
@@ -326,38 +333,21 @@ def main():
             entries_ref = ray.put(entries_day_df.groupby("timestamp"))  # of current day
             order_futures = [
                 actor_chunks[actor_id]
-                .simulate_day.remote(entries_ref, chunked_exit, current_day)
+                .simulate_day.remote(entries_ref, chunked_exit, current_day, actor_id)
                 .future()
                 for actor_id, chunked_exit in chunked_exits_day_df
             ]
 
-            buys = []
-            sells = []
+            order_futures_list.append(order_futures)
 
-            for future in concurrent.futures.as_completed(order_futures):
-                buy, sell = future.result()
-                # TODO: Sort buys and sells
-                buys += buy
-                sells += sell
-                pbar.update(1 / (NUM_CHUNKS * 2))
-
-            # print(buys, sells)
-
-            buy_saver.save_orders(
-                buys,
-                current_day,
-                pbar,
-            )
-            pbar.update(0.25)
-            sell_saver.save_orders(
-                sells,
-                current_day,
-                pbar,
-            )
-
-            pbar.update(0.25)
+            pbar.update(1)
             current_day += timedelta(days=1)
             # pbar.write(f"Moving onto day {current_day}")
+    with tqdm(total=total_days, unit="day", smoothing=0) as pbar:
+        for order_futures in order_futures_list:
+            for future in concurrent.futures.as_completed(order_futures):
+                if future.done():
+                    pbar.update(1 / NUM_CHUNKS)
 
 
 class OrderSaver:
@@ -370,7 +360,7 @@ class OrderSaver:
         self.lastname = None
         self.writer = None
 
-    def save_orders(self, orders, timestamp, pbar):
+    def save_orders(self, orders, timestamp, core):
         # if (
         #     last_timestamp.day == next_timestamp.day
         #     or len(orders[self.type]) == 0
@@ -378,7 +368,7 @@ class OrderSaver:
         # ):
         #     return last_timestamp
 
-        pbar.set_description(f"[{now()}] Saving {timestamp.date()}")
+        # pbar.set_description(f"[{now()}] Saving {timestamp.date()}")
 
         filename = f"day={timestamp.day}"
         order_df = pd.DataFrame.from_records(
@@ -393,6 +383,7 @@ class OrderSaver:
             / f"order {current_time} fee={fee}"
             / f"year={timestamp.year}"
             / f"month={timestamp.month}"
+            / f"core={core}"
         )
 
         # pbar.write(self.type, order_df)
@@ -410,7 +401,7 @@ class OrderSaver:
             )
 
         self.writer.write_table(table)
-        pbar.set_description(f"[{now()}] Saved {timestamp.date()}")
+        # pbar.set_description(f"[{now()}] Saved {timestamp.date()}")
         # timestamp = next_timestamp
         # orders[self.type] = []
         # return timestamp

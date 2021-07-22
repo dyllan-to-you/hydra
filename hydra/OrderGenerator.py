@@ -36,12 +36,6 @@ saved_order_dir = project_dir / "output" / pair / "orders"
 print(psutil.virtual_memory().percent)
 
 
-def chunks(l, n):
-    """Yield n number of striped chunks from l."""
-    for i in range(0, n):
-        yield l[i::n]
-
-
 class BuyOrder(NamedTuple):
     timestamp: datetime
     simulation_id: int
@@ -53,6 +47,7 @@ class SellOrder(NamedTuple):
     simulation_id: int
     trigger_price: float
     profit: float
+    cycle_time: datetime
     hold_time: datetime
 
 
@@ -68,6 +63,7 @@ class Simulation:
     last_order: bool
     buy_trigger_price: float
     buy_time: datetime
+    last_sell_time: datetime
 
     def __init__(self, id, entry_id, exit_id):
         self.id = id
@@ -76,6 +72,7 @@ class Simulation:
         self.last_order = False
         self.buy_trigger_price = None
         self.buy_time = None
+        self.last_sell_time = None
 
     def __hash__(self) -> int:
         return self.id
@@ -97,17 +94,24 @@ def get_hold_time(simulation, sell_time):
     return sell_time - simulation.buy_time
 
 
+def get_cycle_time(simulation, sell_time):
+    return sell_time - simulation.last_sell_time
+
+
 def create_sell_order(simulation, timestamp, trigger, timestamp_in_minutes):
+    profit = get_profit(simulation, trigger)
     order = SellOrder(
         timestamp,
         simulation.id,
         trigger,
-        get_profit(simulation, trigger),
+        profit,
+        get_cycle_time(simulation, timestamp_in_minutes),
         get_hold_time(simulation, timestamp_in_minutes),
     )
     simulation.last_order = False
     simulation.buy_trigger_price = None
     simulation.buy_time = None
+    simulation.last_sell_time = timestamp_in_minutes
     return order
 
 
@@ -230,16 +234,17 @@ class SimulationChunk:
 
                 next_exit = next(self.exits, (None, None))
             elif next_entry_timestamp < next_exit_timestamp:
-                buys = self.create_orders(
+                buys += self.create_orders(
                     next_entry_df, timestamp_in_minutes_entry, False
                 )
                 # encyclopedia.update_buys(buys, timestamp_in_minutes_entry)
 
                 next_entry = next(self.entries, (None, None))
 
-        buy_saver.save_orders(buys, date, actor_id)
-
-        sell_saver.save_orders(sells, date, actor_id)
+        if buys is not None and len(buys) > 0:
+            buy_saver.save_orders(buys, date, actor_id)
+        if sells is not None and len(sells) > 0:
+            sell_saver.save_orders(sells, date, actor_id)
 
         return None
 

@@ -1,6 +1,7 @@
 from datetime import datetime
 from functools import wraps
 from timeit import default_timer as timer
+from typing import List
 import psutil
 import os
 
@@ -28,6 +29,12 @@ def now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def chunk_list(l: List, n: int):
+    """Yield n number of striped chunks from l."""
+    for i in range(0, n):
+        yield l[i::n]
+
+
 def get_mem(unit=None):
     mem = process.memory_info().rss
     if unit is None:
@@ -40,8 +47,12 @@ def get_mem(unit=None):
         return mem / 1024 ** 3
 
 
-def printd(*arg):
-    print(f"[{now()}] ({process.memory_info().rss / 1024 / 1024:.2f})", *arg)
+def printd(*arg, pbar=None):
+    txt = f"[{now()}] ({process.memory_info().rss / 1024 / 1024:.2f}) {' '.join(arg)}"
+    if pbar:
+        pbar.write(txt)
+    else:
+        print(txt)
 
 
 def write(message, filename="log.txt"):

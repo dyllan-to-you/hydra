@@ -27,6 +27,7 @@ intel-openmp = "^2021.2.0"
 ray = {extras = ["default"], version = "^1.4.0"}
 pandas = "^1.2.4"
 vectorbt = "0.17.4"
+PyQt5 = "^5.15.4"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

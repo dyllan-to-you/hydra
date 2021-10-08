@@ -414,37 +414,6 @@ def proportion_factory(proportion_len):
     return lambda x: x[proportion_len:-proportion_len]
 
 
-def additive_variance_calc(variance_cutoff, price_detrended, trendline, df):
-    # printd(f"========== {variance_cutoff} ==========")
-    df["cum variance"] = df[["variance"]].cumsum()
-
-    df["cum detrended price"] = df[["inverse detrended price"]].cumsum()
-    df["cum detrended price correlation"] = df["cum detrended price"].apply(
-        price_detrended.corr
-    )
-    df["cum detrended price variance"] = df["cum detrended price correlation"] ** 2
-    subset = df[df["cum detrended price variance"] <= variance_cutoff]
-    subset_kept = len(subset) / len(df)
-    subset_removed = 1 - subset_kept
-    constructed_sum = np.sum(subset["inverse detrended price"])
-    constructed_coeff = price_detrended.corr(
-        pd.Series(
-            constructed_sum,
-            index=price_detrended.index,
-        )
-    )
-    # printd("constructed", constructed_sum, constructed_coeff)
-    deviance = deviance_calc(constructed_sum, trendline, price_detrended)
-    return (
-        subset,
-        constructed_sum,
-        constructed_coeff,
-        deviance,
-        subset_kept,
-        subset_removed,
-    )
-
-
 def deviance_calc(constructed_sum, trendline, price_detrended):
     constructed_price = constructed_sum + trendline
     price = price_detrended + trendline

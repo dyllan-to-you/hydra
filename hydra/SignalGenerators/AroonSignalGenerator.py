@@ -7,7 +7,7 @@ from numba import njit
 import pandas as pd
 import vectorbt as vbt
 from vectorbt.signals.factory import SignalFactory
-from hydra.SimManager import load_prices
+from hydra.DataLoader import load_prices
 import pyarrow as pa
 import pyarrow.parquet as pq
 from hydra.utils import timeme, now, printd

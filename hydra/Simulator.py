@@ -33,8 +33,8 @@ project_dir = pathlib.Path(__file__).absolute().parent.parent
 NUM_CORES = psutil.cpu_count(logical=True)
 
 pair = "XBTUSD"
-startDate = pd.to_datetime("2017-10-01")
-endDate = pd.to_datetime("2018-02-01")
+startDate = pd.to_datetime("2017-05-01")
+endDate = pd.to_datetime("2020-01-01")
 aroon_reference = "2021-05-20T1919"
 order_folder = "order 2021-06-16T1632 fee=0.001"
 output_dir = project_dir / "output" / pair
@@ -42,13 +42,14 @@ order_dir = output_dir / "orders" / order_folder
 
 fee = 0.001
 init_minutes = 20160
+
 # PARAMS ###############################
-window_size = 300
-decay_rate = 0.05 ** (1 / 40320)
+window_size = 500
+decay_rate = 0.05 ** (1 / 20160)
 
 min_trade_profit = 1.003
 min_profit = 1.01
-min_success_ratio = 1
+min_success_ratio = 0.8
 min_window_trades = 3
 margin = 0.99
 

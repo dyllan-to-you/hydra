@@ -20,7 +20,8 @@ from six import Iterator
 from tqdm import tqdm
 
 from hydra.models import Direction
-from hydra.SimManager import get_simulation_id, load_prices
+from hydra.SimManager import get_simulation_id
+from hydra.DataLoader import load_prices
 from hydra.utils import printd, sanitize_filename, timeme, now as get_now_str
 from hydra.money import calculate_profit
 

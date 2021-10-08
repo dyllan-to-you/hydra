@@ -51,8 +51,7 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
         prices = prices.iloc[:-1]
         price_len = len(prices)
     proportion_len = round(price_len * PROPORTION)
-    get_proportion = proportion_factory(proportion_len)
-    price_proportion = get_proportion(prices)
+    price_proportion = prices[proportion_len:-proportion_len]
 
     if detrend:
         figname = "(D)" + figname
@@ -94,7 +93,7 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
         df = pd.DataFrame(
             [
                 get_ifft_by_key(
-                    proportion_len, fft, minute_bucket, key, price_proportion_index
+                    fft, minute_bucket, key, price_proportion_index, proportion_len
                 )
                 for key in keys
             ],
@@ -102,7 +101,7 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
         )
     else:
         df = df_from_ifft_variance(
-            proportion_len, price_detrended_proportion, fft, freqs
+            fft, freqs, price_detrended_proportion, proportion_len
         )
 
     printd("Sorting variance")
@@ -115,13 +114,12 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
         subset_removed,
         frequencies_kept,
     ) = construct_price_significant_frequencies(
-        proportion_len,
-        price_proportion,
-        price_detrended_proportion,
-        trendline_proportion,
+        df,
         fft,
         freqs,
-        df,
+        price_detrended_proportion,
+        trendline_proportion,
+        proportion_len,
     )
     print(
         pd.DataFrame(
@@ -171,17 +169,17 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
 
 @timeme
 def construct_price_significant_frequencies(
-    proportion_len,
-    price_proportion,
-    price_detrended_proportion,
-    trendline_proportion,
+    df: pd.DataFrame,
     fft,
     freqs,
-    df,
+    price_detrended_proportion: pd.Series,
+    trendline_proportion: pd.Series,
+    proportion_len: int,
 ):
     # Running subtraction
     price_detrended_proportion_add = pd.Series(
-        np.zeros(len(price_proportion)), index=price_proportion.index
+        np.zeros(len(price_detrended_proportion)),
+        index=price_detrended_proportion.index,
     )
     print("price", price_detrended_proportion)
     deviances = [
@@ -196,10 +194,11 @@ def construct_price_significant_frequencies(
     freqs_pos = freqs[freqs >= 0]
     frequencies_kept = pd.Series(np.zeros(len(freqs_pos)), index=freqs_pos)
     print(df)
+    base = None
     for idx, frequency, variance in df.itertuples(name=None):
         key = idx + 1
         count += 1
-        ifft = get_ifft_by_index(fft, key, proportion_len, price_proportion.index)
+        ifft, base = get_ifft_by_index(fft, key, proportion_len, base)
         price_detrended_proportion_add = price_detrended_proportion_add + ifft
         deviance = deviance_calc(
             price_detrended_proportion_add,
@@ -219,37 +218,17 @@ def construct_price_significant_frequencies(
 
 
 def transform(values, time_step):
-    # printd("NUM SAMPLES,", values.shape, values)
     freqs = np.fft.fftfreq(values.size, time_step)
     index = np.argsort(freqs)
-    fft, powers = get_fft(values, time_step)
-    # printd(freqs)
+    fft, powers = get_fft(values)
     return fft, freqs, index, powers
 
 
-def get_fft(values, time_step):
+def get_fft(values):
     fft = np.fft.fft(values)
     fft[0] = 0
     powers = fft.real ** 2
-    # eval_fft(fft, time_step)
-    # printd(fft, powers)
     return fft, powers
-
-
-def eval_fft(fft, time_step):
-    printd("TRANFORM")
-    printd(
-        "amp",
-        np.sqrt(
-            (np.abs(fft.real) / len(fft)) ** 2 + (np.abs(fft.imag) / len(fft)) ** 2,
-        )
-        * 2,
-    )
-
-
-def chart_fft(ffta, fftb, time_step):
-    eval_fft(ffta, time_step)
-    eval_fft(fftb, time_step)
 
 
 @timeme
@@ -295,7 +274,7 @@ def get_keys(*arr, keep=False):
     return _arr + [x * -1 for x in _arr]
 
 
-def get_ifft_by_key(proportion_len, fft, minute_bucket, key, price_proportion_index):
+def get_ifft_by_key(fft, minute_bucket, key, price_proportion_index, proportion_len):
     # printd("GET IFFT BY KEY", key)
     # [zero] = minute_bucket[0]
     # printd("ZERO", zero)
@@ -313,8 +292,9 @@ def get_ifft_by_key(proportion_len, fft, minute_bucket, key, price_proportion_in
     return (key, ifft_series, len(keep_me))
 
 
-def get_ifft_by_index(fft, idx, proportion_len, price_proportion_index):
-    base = np.zeros(len(fft), dtype=np.complex128)
+def get_ifft_by_index(fft, idx, proportion_len, base=None):
+    if base is None:
+        base = np.zeros(len(fft), dtype=np.complex128)
     base[idx] = fft[idx]
     base[-idx] = fft[-idx]
     ifft = np.fft.ifft(base)
@@ -327,37 +307,28 @@ def get_ifft_by_index(fft, idx, proportion_len, price_proportion_index):
     #     printd(f"============ WARNING BOOTY {idx} TOO BIG ============")
     #     printd(ifft_proportion[imaginary_booty])
 
-    ifft_series = pd.Series(
-        ifft_proportion.real,
-        index=price_proportion_index,
-    )
-    return ifft_series
+    return ifft_proportion.real, base
 
 
 @timeme
 def df_from_ifft_variance(
-    proportion_len, price_detrended_proportion: pd.Series, fft, freqs
+    fft, freqs, price_detrended_proportion: pd.Series, proportion_len
 ):
     return pd.DataFrame(
         iterate_ifft_variance_np(
-            fft, freqs, proportion_len, price_detrended_proportion
+            fft, freqs, price_detrended_proportion, proportion_len
         ),
         columns=["frequency", "variance"],
     )
 
 
 def iterate_ifft_variance_scp(
-    fft, freq, proportion_len, price_detrended_proportion: pd.Series
+    fft, freq, price_detrended_proportion: pd.Series, proportion_len
 ):
     mid = len(fft) // 2
-    base = np.zeros(len(fft), dtype=np.complex128)
+    base = None
     for idx in range(1, mid):
-        base[idx] = fft[idx]
-        base[-idx] = fft[-idx]
-        ifft = np.fft.ifft(base)
-        base[idx] = 0
-        base[-idx] = 0
-        ifft_proportion = ifft.real[proportion_len:-proportion_len]
+        ifft_proportion, base = get_ifft_by_index(fft, idx, proportion_len, base)
         correlation, pval = stats.pearsonr(
             price_detrended_proportion.values, ifft_proportion
         )
@@ -367,17 +338,12 @@ def iterate_ifft_variance_scp(
 
 
 def iterate_ifft_variance_np(
-    fft, freq, proportion_len, price_detrended_proportion: pd.Series
+    fft, freq, price_detrended_proportion: pd.Series, proportion_len: pd.Series
 ):
     mid = len(fft) // 2
-    base = np.zeros(len(fft), dtype=np.complex128)
+    base = None
     for idx in range(1, mid):
-        base[idx] = fft[idx]
-        base[-idx] = fft[-idx]
-        ifft = np.fft.ifft(base)
-        base[idx] = 0
-        base[-idx] = 0
-        ifft_proportion = ifft.real[proportion_len:-proportion_len]
+        ifft_proportion, base = get_ifft_by_index(fft, idx, proportion_len, base)
         """
         Note: This returns a matrix of the shape
         array([ [1.        , 0.37405599],
@@ -390,16 +356,11 @@ def iterate_ifft_variance_np(
         yield freq[idx], variance
 
 
-def iterate_ifft_variance_pd(fft, freq, proportion_len, price_detrended_proportion):
+def iterate_ifft_variance_pd(fft, freq, price_detrended_proportion, proportion_len):
     mid = len(fft) // 2
-    base = np.zeros(len(fft), dtype=np.complex128)
+    base = None
     for idx in range(1, mid):
-        base[idx] = fft[idx]
-        base[-idx] = fft[-idx]
-        ifft = np.fft.ifft(base)
-        base[idx] = 0
-        base[-idx] = 0
-        ifft_proportion = ifft.real[proportion_len:-proportion_len]
+        ifft_proportion, base = get_ifft_by_index(fft, idx, proportion_len, base)
         ifft_series = pd.Series(ifft_proportion, index=price_detrended_proportion.index)
         correlation = price_detrended_proportion.corr(ifft_series)
         variance = correlation ** 2
@@ -408,10 +369,6 @@ def iterate_ifft_variance_pd(fft, freq, proportion_len, price_detrended_proporti
 
 def line_gen(slope, intercept, len):
     return np.arange(len) * slope + intercept
-
-
-def proportion_factory(proportion_len):
-    return lambda x: x[proportion_len:-proportion_len]
 
 
 def deviance_calc(constructed_sum, trendline, price_detrended):

@@ -24,7 +24,7 @@ def load_prices(
         prices = prices.set_index("time")
     if startDate is not None and endDate is not None:
         prices = prices.loc[startDate:endDate]
-        # prices = prices.iloc[:-1]
+        prices = prices.iloc[:-1]
     return prices.drop("trades", axis=1)
 
 

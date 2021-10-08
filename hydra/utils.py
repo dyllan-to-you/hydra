@@ -48,7 +48,7 @@ def get_mem(unit=None):
 
 
 def printd(*arg, pbar=None):
-    txt = f"[{now()}] ({process.memory_info().rss / 1024 / 1024:.2f}) {' '.join(arg)}"
+    txt = f"[{now()}] ({process.memory_info().rss / 1024 / 1024:.2f}) {' '.join([str(a) for a in arg])}"
     if pbar:
         pbar.write(txt)
     else:

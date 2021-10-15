@@ -1,9 +1,10 @@
 from datetime import datetime
 from functools import wraps
 from timeit import default_timer as timer
-from typing import List
+from typing import List, Union
 import psutil
 import os
+import pandas as pd
 
 process = psutil.Process(os.getpid())
 
@@ -100,3 +101,13 @@ def timeme(fn):
         return result
 
     return wrap
+
+
+def split_dupes(df: Union[pd.DataFrame, pd.Series]):
+    duplicates = df
+    sets = []
+    while len(duplicates):
+        uniques = duplicates[~duplicates.index.duplicated(keep="first")]
+        duplicates = duplicates[duplicates.index.duplicated(keep="first")]
+        sets.append(uniques)
+    return sets

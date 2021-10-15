@@ -625,6 +625,10 @@ if __name__ == "__main__":
     detrend = True
     data, charts, aggregate = main(start, timecap, count, overlap, detrend)
 
+    filename = f"{start} {timecap} {count=} {overlap=} {detrend=}.enviro"
+    file = dict(data=data, charts=charts, aggregate=aggregate)
+    with open(filename, "wb") as handle:
+        pickle.dump(file, handle)
     results = pd.DataFrame(data).set_index("index")
     print("++++++++++++ RESULTS ++++++++++++")
     print(results)

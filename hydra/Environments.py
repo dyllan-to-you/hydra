@@ -2,24 +2,25 @@
 import os
 import sys
 import traceback
+import pickle
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pandas.core.frame import DataFrame
 import ray
 from scipy import stats
+import seaborn as sns
 
 from hydra.DataLoader import load_prices
-from hydra.mpl_charts import heatmap
 from hydra.utils import printd, timeme
 
-# import matplotlib
 
-
-pd.set_option("display.max_rows", 50)
-pd.set_option("display.max_columns", 500)
+# pd.set_option("display.max_rows", 50)
+# pd.set_option("display.max_columns", 50)
 pd.set_option("display.width", 0)
-
+sns.set_theme()
 
 pair = "XBTUSD"
 PROPORTION = 0.025
@@ -33,17 +34,30 @@ PRICE_DEVIANCE_PORTION = 0.01
 
 
 @ray.remote
-def main_ray(*args, **kwargs):
-    return main(*args, **kwargs)
+def generate_environment_ray(*args, **kwargs):
+    return generate_environment(*args, **kwargs)
 
 
 @timeme
-def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
+def generate_environment(
+    pair,
+    startDate,
+    endDate=None,
+    detrend=False,
+    buckets=False,
+    timecap=None,
+    normalize_amplitude=True,
+):
+    startDate = pd.to_datetime(startDate)
     if timecap is not None:
         delta = pd.to_timedelta(timecap)
-        endDate = pd.to_datetime(startDate) + delta
+        endDate = startDate + delta
+    endDate = pd.to_datetime(endDate)
     time_step = 1 / 60 / 24
-    figname = f"{pair} {startDate} - {endDate}"
+    fig_dates = (
+        f"{startDate.strftime('%Y-%m-%d %H:%M')} - {endDate.strftime('%Y-%m-%d %H:%M')}"
+    )
+    figname = f"{pair} {fig_dates}"
     prices = load_prices(pair, startDate=startDate, endDate=endDate)["open"]
     price_len = len(prices)
     # Even numbered price length can result in a 3x speedup!
@@ -53,15 +67,15 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
     proportion_len = round(price_len * PROPORTION)
     price_proportion = prices[proportion_len:-proportion_len]
 
+    slope = 0
+    intercept = np.mean(prices)
     if detrend:
         figname = "(D)" + figname
         slope, intercept, *_ = stats.linregress(
             np.array(range(price_len)),
             prices,
         )
-        trendline = line_gen(slope, intercept, price_len)
-    else:
-        trendline = np.full(price_len, np.mean(prices))
+    trendline = line_gen(slope, intercept, price_len)
 
     price_detrended = prices - trendline
     price_detrended_proportion = price_detrended[proportion_len:-proportion_len]
@@ -76,33 +90,21 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
     fft, freqs, index, powers = valuable_info
     print(f"{len(fft)=} {fft=}")
     print(f"{len(freqs)=} {freqs=}")
-    printd("Calculating Amplitude")
     fft_amplitude = (
         np.sqrt((np.abs(fft.real) / len(fft)) ** 2 + (np.abs(fft.imag) / len(fft)) ** 2)
-        * 2
-    )  # Since the power is split between positive and negative freq, multiply by 2
-    printd("Calculated Amplitude")
-    # printd("PRICES", prices, prices.shape, key_count)
-    df: pd.DataFrame = None
-    if buckets:
-        minute_bucket, minute_bucket_df = get_fft_buckets(valuable_info)
-        print(minute_bucket_df)
+        * 2  # Since the power is split between positive and negative freq, multiply by 2
+    )
 
-        keys = sorted([k for k in minute_bucket.keys() if k > 0])
-        printd(f"{len(keys)=}")
-        df = pd.DataFrame(
-            [
-                get_ifft_by_key(
-                    fft, minute_bucket, key, price_proportion_index, proportion_len
-                )
-                for key in keys
-            ],
-            columns=["frequency", "inverse detrended price", "num_frequencies"],
-        )
-    else:
-        df = df_from_ifft_variance(
-            fft, freqs, price_detrended_proportion, proportion_len
-        )
+    if normalize_amplitude:
+        fft_amplitude_sum = np.sum(fft_amplitude)
+        fft_amplitude = fft_amplitude / fft_amplitude_sum
+
+    print(f"{len(fft_amplitude)=} {fft_amplitude=}")
+    fft_amplitude_positive = fft_amplitude[0 : len(fft_amplitude) // 2]
+    # printd("PRICES", prices, prices.shape, key_count)
+    df: pd.DataFrame = df_from_ifft_variance(
+        fft, freqs, price_detrended_proportion, proportion_len
+    )
 
     printd("Sorting variance")
     df = df.sort_values(["variance"], ascending=False)
@@ -121,6 +123,9 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
         trendline_proportion,
         proportion_len,
     )
+
+    frequencies_kept_amplitude = frequencies_kept * fft_amplitude_positive
+
     print(
         pd.DataFrame(
             {"Deviance": pd.Series(deviances), "Removed": pd.Series(subset_removed)}
@@ -144,6 +149,7 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
         ],
         df.shape,
     )
+    print("kept", frequencies_kept_amplitude)
 
     interesting = dict(
         index=figname,
@@ -154,15 +160,20 @@ def main(pair, startDate, endDate, detrend=False, buckets=False, timecap=None):
     )
 
     plotty = dict(
+        startDate=startDate,
+        endDate=endDate,
         figname=figname,
+        fig_dates=fig_dates,
         subset_removed=subset_removed,
         deviance=deviances,
-        price_proportion=price_proportion,
-        price_detrended_proportion=price_detrended_proportion,
-        trendline_proportion=trendline_proportion,
+        price=prices,
+        price_detrended=price_detrended,
+        trendline=pd.Series(trendline, index=price_index),
+        trend_slope=slope,
+        trend_intercept=intercept,
         majority_price_proportion=majority_price_proportion + trendline_proportion,
         fft=fft,
-        frequencies_kept=frequencies_kept,
+        frequencies_kept=frequencies_kept_amplitude,
     )
     return interesting, plotty
 
@@ -193,6 +204,7 @@ def construct_price_significant_frequencies(
     subset_removed = [1]
     freqs_pos = freqs[freqs >= 0]
     frequencies_kept = pd.Series(np.zeros(len(freqs_pos)), index=freqs_pos)
+    frequencies_kept.index.rename("frequency", inplace=True)
     print(df)
     base = None
     for idx, frequency, variance in df.itertuples(name=None):
@@ -233,27 +245,24 @@ def get_fft(values):
 
 @timeme
 def get_fft_buckets(valuable_info):
-    _fft, freqs, index, powers = valuable_info
-    # printd("VALUABLE", valuable_info)
+    fft, freqs, index, powers = valuable_info
 
-    freqs = freqs[index]
-    fft = _fft[index]
-    # ([zero],) = np.where(freqs == 0)
-    # freqs = freqs[zero + 1 :]
-    # fft = fft[zero + 1 :]
     minute_buckets = {}
     fft_res = pd.DataFrame(dict(power=fft, freqs=freqs))
+    print("fft_res", fft_res)
     # printd("fft,freqs", fft_res)
     for idx, freq in enumerate(freqs):
-        power = fft[idx]
         min_per_cycle = None
         if freq == 0:
             min_per_cycle = 0
         else:
             min_per_cycle = round(1440 / freq)  # if freq != 0 else 0
+            if min_per_cycle == 0:
+                min_per_cycle = 1
+
         # printd(idx, freq, power, min_per_cycle)
-        bucket = minute_buckets.setdefault(freq, [])
-        bucket.append(power)
+        bucket = minute_buckets.setdefault(min_per_cycle, [])
+        bucket.append(idx)
     # printd("Keys", sorted([k for k in minute_buckets.keys() if k > 0]))
     minute_bucket_df = pd.DataFrame(
         dict(minutes=minute_buckets.keys(), fft=minute_buckets.values())
@@ -367,8 +376,28 @@ def iterate_ifft_variance_pd(fft, freq, price_detrended_proportion, proportion_l
         yield freq[idx], variance
 
 
-def line_gen(slope, intercept, len):
-    return np.arange(len) * slope + intercept
+def date_line_gen_factory(slope, intercept, originalStartDate, *args, **kwargs):
+    def date_line_gen(start, end, interval):
+        startDate = pd.to_datetime(start)
+        startDelta = startDate - originalStartDate
+        startDelta_m = startDelta.total_seconds() / 60
+
+        endDate = pd.to_datetime(end)
+        delta = endDate - originalStartDate
+        delta_m = delta.total_seconds() / 60
+
+        return line_gen(
+            slope, intercept, start=startDelta_m, stop=delta_m, interval=interval
+        )
+
+    return date_line_gen
+
+
+def line_gen(slope, intercept, stop, start=None, interval=1):
+    if start is None:
+        return np.arange(stop, step=interval) * slope + intercept
+    else:
+        return np.arange(start, stop, step=interval) * slope + intercept
 
 
 def deviance_calc(constructed_sum, trendline, price_detrended):
@@ -386,26 +415,27 @@ def deviance_calc(constructed_sum, trendline, price_detrended):
 @timeme
 def render_charts(
     figname,
+    fig_dates,
     subset_removed,
     deviance,
-    price_proportion,
-    price_detrended_proportion,
-    trendline_proportion,
+    price,
+    price_detrended,
+    trendline,
     majority_price_proportion,
     fft,
     frequencies_kept,
     **kwargs,
 ):
     fig, axs = plt.subplots(2, num=figname)
-    fig.suptitle(figname)
+    fig.suptitle(fig_dates)
     axs[0].set_title("subset deviance")
     axs[0].plot(subset_removed, deviance, ".")
     render_price_chart(
-        price_proportion,
+        price,
         price_chart=[
-            # ("detrended", price_detrended_proportion),
+            # ("detrended", price_detrended),
             ("majority", majority_price_proportion),
-            ("trendline", trendline_proportion),
+            ("trendline", trendline),
         ],
         # price_chart=[
         #     (
@@ -416,14 +446,9 @@ def render_charts(
         #     *cutoffs[-1]["subset"].itertuples(index=False, name=None),
         # ],
         # price_offset=trendline,
-        figname=figname,
+        figname=fig_dates,
         ax=axs[1],
     )
-
-    # axs[2].set_title("Important Frequencies")
-    # printd(f"{figname}: kept", frequencies_kept)
-    # width = frequencies_kept.index[1] - frequencies_kept.index[0]
-    # axs[2].bar(frequencies_kept.index, frequencies_kept.values, width=width)
 
 
 def render_price_chart(
@@ -444,32 +469,94 @@ def render_price_chart(
         ax.plot(prices.index, p + price_offset, label=f"{label} ({_})")
 
 
-def render_agg_chart(data):
+def bucket_frequencies(frequencies) -> pd.DataFrame:
+    df = frequencies.copy()
+    # print(df)
+    df["min/cycle"] = np.round(1440 / frequencies.index.to_numpy())
+    df = df.iloc[::-1]
+    # df["diff"] = df["min/cycle"].diff()
+    # df["diff%"] = df["diff"].div(df["min/cycle"].shift(1))
+    # df["cumdiff%"] = df["diff%"].cumsum()
+    # df["cumdiff%mod"] = df["cumdiff%"].div(0.1)
+    # df["cumdiff%moddiff"] = df["cumdiff%mod"].sub(df["cumdiff%mod"].shift(1))
+    # df["line"] = 0
+    # df.loc[df["cumdiff%moddiff"] >= 1, "line"] = 1
+    # print("FREQ", df)
+    buckets = {}
+    agg = []
+    start = None
+    last = None
+    acc = 0
+    for minutes, group in df.groupby("min/cycle"):
+        agg.append(group)
+        if last is None:
+            start = last = minutes
+            continue
+        if start is None:
+            start = minutes
+        acc += (minutes - last) / last
+
+        if acc > 0.1:
+            label = f"{start}-{minutes}"
+            catted = pd.concat(agg)
+            catted["label"] = label
+            buckets[start] = catted
+            acc = 0
+            agg = []
+            start = None
+            last = minutes
+            # print(label, catted, catted.shape)
+            continue
+        last = minutes
+    bucketed: pd.DataFrame = pd.concat(buckets)
+    bucketed = bucketed.drop(columns=["min/cycle"])
+    label_map = bucketed[["label"]]
+    label_map = label_map.droplevel(1).drop_duplicates()
+    # print(label_map)
+    # print(bucketed)
+    bucketed = bucketed.groupby(level=0).sum().join(label_map).set_index("label")
+    # print(bucketed)
+    return bucketed
+
+
+def process_aggregate(data, chart):
+    frequencies_kept_df = pd.DataFrame()
+    for d in chart:
+        frequencies_kept_df[d["fig_dates"]] = d["frequencies_kept"]
+    frequencies_kept_df = frequencies_kept_df.replace(0, np.nan)
+    first_idx = frequencies_kept_df.first_valid_index()
+    last_idx = frequencies_kept_df.last_valid_index()
+    frequencies_kept_df = frequencies_kept_df.loc[first_idx:last_idx]
+
+    frequencies_kept_df = bucket_frequencies(frequencies_kept_df)
+    maxes = frequencies_kept_df.max(axis=1)
+    frequencies_kept_df = frequencies_kept_df.divide(maxes, axis=0)
+
+    return frequencies_kept_df
+
+
+def render_agg_chart(frequencies_kept_df):
     fig, axs = plt.subplots(1, num="Aggregate")
     fig.suptitle("Aggregate")
-    frequencies_kept_df = pd.DataFrame()
-    for d in data:
-        frequencies_kept_df[d["figname"]] = d["frequencies_kept"]
-    print("agg: kept", frequencies_kept_df)
-    print(
-        frequencies_kept_df.to_numpy(),
-        frequencies_kept_df.index,
-        frequencies_kept_df.columns,
-    )
-    heatmap(
-        frequencies_kept_df.to_numpy(),
-        frequencies_kept_df.index,
-        frequencies_kept_df.columns,
-        ax=axs,
-    )
-    # axs.bar(frequencies_kept_agg.index, frequencies_kept_agg.values, width=width)
+    # print(
+    #     "aggregate",
+    # )
+    # print(frequencies_kept_df)
+    print(frequencies_kept_df.index)
+    # width = frequencies_kept_df.index[1] - frequencies_kept_df.index[0]
+    # axs.bar(frequencies_kept_df.index, frequencies_kept_df["sum"], width=width)
+    current_cmap = matplotlib.cm.get_cmap("afmhot_r").copy()
+    current_cmap.set_bad(color="black")
+    # afmhot_r
+    sns.heatmap(frequencies_kept_df, cmap=current_cmap, ax=axs, robust=True)
+    axs.tick_params(axis="x", labelrotation=-90)
 
 
 RATE_LIMIT = 32
 
 
 @timeme
-def supermain(tasks):
+def parallel_handler(tasks):
     if sys.argv[-1] == "ray":
         try:
             ray.init(include_dashboard=False, local_mode=False)
@@ -479,7 +566,9 @@ def supermain(tasks):
             for idx, task in enumerate(tasks):
                 if len(result_refs) > RATE_LIMIT:
                     ray.wait(result_refs, num_returns=idx - RATE_LIMIT)
-                result_refs.append(main_ray.remote(*task["args"], **task["kwargs"]))
+                result_refs.append(
+                    generate_environment_ray.remote(*task["args"], **task["kwargs"])
+                )
             return ray.get(result_refs)
         except KeyboardInterrupt:
             printd("Interrupted")
@@ -491,70 +580,31 @@ def supermain(tasks):
         finally:
             ray.shutdown()
     else:
-        return [main(*task["args"], **task["kwargs"]) for task in tasks]
+        return [generate_environment(*task["args"], **task["kwargs"]) for task in tasks]
 
 
-if __name__ == "__main__":
-    results = None
-    tasks = [
-        {
-            "args": (pair, "2020-05-01", "2020-06-01"),
-            "kwargs": {"detrend": True, "timecap": "30d"},
-        },
-        # {
-        #     "args": (pair, "2020-06-01", "2020-07-01"),
-        #     "kwargs": {"detrend": True, "timecap": "30d"},
-        # },
-        # {
-        #     "args": (
-        #         pair,
-        #         "2020-07-01",
-        #         "2020-08-01",
-        #     ),
-        #     "kwargs": {"detrend": True, "timecap": "30d"},
-        # },
-        # {
-        #     "args": (
-        #         pair,
-        #         "2020-08-01",
-        #         "2020-09-01",
-        #     ),
-        #     "kwargs": {"detrend": True, "timecap": "30d"},
-        # },
-        # {
-        #     "args": (
-        #         pair,
-        #         "2020-09-01",
-        #         "2020-10-01",
-        #     ),
-        #     "kwargs": {"detrend": True, "timecap": "30d"},
-        # },
-        # {
-        #     "args": (
-        #         pair,
-        #         "2020-10-01",
-        #         "2020-11-01",
-        #     ),
-        #     "kwargs": {"detrend": True, "timecap": "30d"},
-        # },
-        # {
-        #     "args": (
-        #         pair,
-        #         "2020-11-01",
-        #         "2020-12-01",
-        #     ),
-        #     "kwargs": {"detrend": True, "timecap": "30d"},
-        # },
-        # {
-        #     "args": (
-        #         pair,
-        #         "2020-12-01",
-        #         "2021-01-01",
-        #     ),
-        #     "kwargs": {"detrend": True, "timecap": "30d"},
-        # },
-    ]
-    results = supermain(tasks)
+def gen_tasks(start, length, count=8, end=None, overlap=0, detrend=True):
+    start = pd.to_datetime(start)
+    if end is not None:
+        # Todo: see if end is time delta or datetime, use to generate count
+        pass
+    delta = pd.to_timedelta(length)
+    if overlap > 0:
+        delta -= pd.to_timedelta(overlap)
+    for i in range(count):
+        startDate = start + i * delta
+        yield {
+            "args": (pair, startDate),
+            "kwargs": {"detrend": detrend, "timecap": length},
+        }
+
+
+def main(start, timecap, count, overlap, detrend):
+
+    tasks = list(
+        gen_tasks(start, timecap, count=count, overlap=overlap, detrend=detrend)
+    )
+    results = parallel_handler(tasks)
     if results is None:
         try:
             sys.exit(0)
@@ -562,10 +612,25 @@ if __name__ == "__main__":
             os._exit(0)
 
     data, charts = zip(*results)
+
+    aggregates = process_aggregate(data, charts)
+    return data, charts, aggregates
+
+
+if __name__ == "__main__":
+    start = "2020-05-01"
+    timecap = "1d"
+    count = 365
+    overlap = "18h"
+    detrend = True
+    data, charts, aggregate = main(start, timecap, count, overlap, detrend)
+
     results = pd.DataFrame(data).set_index("index")
     print("++++++++++++ RESULTS ++++++++++++")
     print(results)
-    # for chart in charts:
-    #     render_charts(**chart)
-    # render_agg_chart(charts)
-    # plt.show()
+    sys.exit()
+    for chart in charts:
+        if np.count_nonzero(chart["frequencies_kept"]) < 3:
+            render_charts(**chart)
+    render_agg_chart(aggregate)
+    plt.show()

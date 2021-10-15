@@ -34,12 +34,12 @@ PRICE_DEVIANCE_PORTION = 0.01
 
 
 @ray.remote
-def generate_environment_ray(*args, **kwargs):
-    return generate_environment(*args, **kwargs)
+def fft_price_analysis_ray(*args, **kwargs):
+    return fft_price_analysis(*args, **kwargs)
 
 
 @timeme
-def generate_environment(
+def fft_price_analysis(
     pair,
     startDate,
     endDate=None,
@@ -567,7 +567,7 @@ def parallel_handler(tasks):
                 if len(result_refs) > RATE_LIMIT:
                     ray.wait(result_refs, num_returns=idx - RATE_LIMIT)
                 result_refs.append(
-                    generate_environment_ray.remote(*task["args"], **task["kwargs"])
+                    fft_price_analysis_ray.remote(*task["args"], **task["kwargs"])
                 )
             return ray.get(result_refs)
         except KeyboardInterrupt:
@@ -580,7 +580,7 @@ def parallel_handler(tasks):
         finally:
             ray.shutdown()
     else:
-        return [generate_environment(*task["args"], **task["kwargs"]) for task in tasks]
+        return [fft_price_analysis(*task["args"], **task["kwargs"]) for task in tasks]
 
 
 def gen_tasks(start, length, count=8, end=None, overlap=0, detrend=True):

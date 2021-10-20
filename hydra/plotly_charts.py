@@ -24,7 +24,8 @@ def supersample_data(data, interval):
     res = {interval: data}
     for i in intervals:
         if i not in res:
-            res[i] = data.resample(f"{interval}m").asfreq()
+            res[i] = data.resample(f"{i}T").asfreq()
+            # print("res", i, f"{interval}T", res[i])
     return res
 
 
@@ -36,7 +37,7 @@ def data_resample_factory(data: "dict[int, pd.DataFrame]"):
         precise_data = interval_data.loc[fakestart:fakeend]
         big_data = data[intervals[-1]]
         the_data = pd.concat(
-            [big_data.query("index < @fakestart or index > @fakeend"), precise_data]
+            [big_data.loc[:fakestart], big_data.loc[fakeend:], precise_data]
         ).sort_index()
 
         return the_data
@@ -77,7 +78,7 @@ def data_extrapolator(data, figure, trace_idx, fields):
     return slicer
 
 
-def get_candlestick(pair, startDate, endDate):
+def get_price_trace(pair, startDate, endDate):
     prices = {}
     prices[1] = load_prices(pair, startDate=startDate, endDate=endDate, interval=1)
     prices[5] = load_prices(pair, startDate=startDate, endDate=endDate, interval=5)
@@ -95,15 +96,16 @@ def get_candlestick(pair, startDate, endDate):
         low=prices[1440]["low"],
         close=prices[1440]["close"],
         hoverinfo="all",
+        name="Prices",
     )
 
     return candlestick, prices
 
 
-# TODO: Turn into class
-# TODO: move lingering variables into attributes
-# TODO: Put start/end date into attribute
-# TODO: Use class in `environments.ipynb` to render trendline
+# DONE: Turn into class
+# DONE: move lingering variables into attributes
+# DONE: Put start/end date into attribute
+# DONE: Use class in `environments.ipynb` to render trendline
 # TODO: Render fft aggregate
 # TODO: extrapolate fft aggregate (just render min/max prediction)
 # TODO: Predictive ability metrics
@@ -111,63 +113,70 @@ def get_candlestick(pair, startDate, endDate):
 # TODO: ???
 # TODO: PROFIT
 
-data_idx = 0
 
+class PlotlyPriceChart:
+    def __init__(self, pair, startDate, endDate):
+        self.data_idx = 0
+        self.handle_list = []
+        self.handler = self.handler_factory()
+        self.figure: go.FigureWidget = None
+        self.generate_figure(pair, startDate, endDate)
 
-def add_trace(figure: go.FigureWidget, trace, data, fields, startDate, endDate):
-    global data_idx
-    figure.add_trace(trace)
-    update_candlestick = data_extrapolator(
-        data,
-        figure,
-        data_idx,
-        fields,
-    )
+    def add_trace(self, trace, data, fields, startDate, endDate):
+        self.figure.add_trace(trace)
+        update_candlestick = data_extrapolator(
+            data,
+            self.figure,
+            self.data_idx,
+            fields,
+        )
 
-    register_handler(figure, update_candlestick, startDate, endDate)
-    data_idx += 1
+        self.register_handler(update_candlestick, startDate, endDate)
+        self.data_idx += 1
 
+    def handler_factory(self):
+        def handler(obj, xrange):
+            [start, end] = xrange.range
+            for fn in self.handle_list:
+                fn(start, end)
 
-handle_list = []
+        return handler
 
+    def register_handler(self, fn, startDate, endDate):
+        fn(startDate, endDate)
+        self.handle_list.append(fn)
+        self.figure.layout.on_change(self.handler, "xaxis")
 
-def handler(obj, xrange):
-    [start, end] = xrange.range
-    for fn in handle_list:
-        fn(start, end)
-
-
-def register_handler(figure, fn, startDate, endDate):
-    fn(startDate, endDate)
-    handle_list.append(fn)
-    figure.layout.on_change(handler, "xaxis")
-
-
-def graph(pair, startDate, endDate):
-    figure = go.FigureWidget(
-        data=[],
-        # data=[candlestick],
-        layout=go.Layout(
-            title=dict(text="FLYBABYFLY"),
-            barmode="overlay",
-            yaxis={"fixedrange": False},
-            yaxis2=dict(
-                fixedrange=False,
-                domain=[0, 1],
+    def generate_figure(self, pair, startDate, endDate):
+        self.figure = go.FigureWidget(
+            data=[],
+            # data=[candlestick],
+            layout=go.Layout(
+                title=dict(text="FLYBABYFLY"),
+                barmode="overlay",
+                yaxis={"fixedrange": False},
+                yaxis2=dict(
+                    fixedrange=False,
+                    domain=[0, 1],
+                ),
             ),
-        ),
-    )
-    candlestick, prices = get_candlestick(pair, startDate, endDate)
-    add_trace(
-        figure,
-        candlestick,
-        prices,
-        {"x": "index", "open": "open", "high": "high", "low": "low", "close": "close"},
-        startDate,
-        endDate,
-    )
+        )
+        candlestick, prices = get_price_trace(pair, startDate, endDate)
+        self.add_trace(
+            candlestick,
+            prices,
+            {
+                "x": "index",
+                "open": "open",
+                "high": "high",
+                "low": "low",
+                "close": "close",
+            },
+            startDate,
+            endDate,
+        )
 
-    return figure
+        return self
 
 
 # def add_handler(handler):

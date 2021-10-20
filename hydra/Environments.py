@@ -583,13 +583,13 @@ def parallel_handler(tasks):
         return [fft_price_analysis(*task["args"], **task["kwargs"]) for task in tasks]
 
 
-def gen_tasks(start, length, count=8, end=None, overlap=0, detrend=True):
+def gen_tasks(start, length, count=8, end=None, overlap=None, detrend=True):
     start = pd.to_datetime(start)
     if end is not None:
         # Todo: see if end is time delta or datetime, use to generate count
         pass
     delta = pd.to_timedelta(length)
-    if overlap > 0:
+    if overlap is not None:
         delta -= pd.to_timedelta(overlap)
     for i in range(count):
         startDate = start + i * delta
@@ -618,15 +618,13 @@ def main(start, timecap, count, overlap, detrend):
 
 
 if __name__ == "__main__":
-    start = "2020-05-01"
-    timecap = "1d"
-    count = 365
-    overlap = "18h"
-    detrend = True
-    data, charts, aggregate = main(start, timecap, count, overlap, detrend)
+    inputs = dict(
+        start="2020-05-01", timecap="1d", count=365, overlap="18h", detrend=True
+    )
+    data, charts, aggregate = main(**inputs)
 
-    filename = f"{start} {timecap} {count=} {overlap=} {detrend=}.enviro"
-    file = dict(data=data, charts=charts, aggregate=aggregate)
+    filename = f"{inputs['start']} {inputs['timecap']} count={inputs['count']} overlap={inputs['overlap']} detrend={inputs['detrend']}.enviro"
+    file = dict(data=data, charts=charts, aggregate=aggregate, inputs=inputs)
     with open(filename, "wb") as handle:
         pickle.dump(file, handle)
     results = pd.DataFrame(data).set_index("index")

@@ -22,7 +22,6 @@ from hydra.utils import printd, timeme
 pd.set_option("display.width", 0)
 sns.set_theme()
 
-pair = "XBTUSD"
 PROPORTION = 0.025
 PRICE_DEVIANCE_CUTOFF = 0.01
 PRICE_DEVIANCE_PORTION = 0.01
@@ -64,8 +63,8 @@ def fft_price_analysis(
     if price_len % 2 == 1:
         prices = prices.iloc[:-1]
         price_len = len(prices)
-    proportion_len = round(price_len * PROPORTION)
-    price_proportion = prices[proportion_len:-proportion_len]
+    trim_len = round(price_len * PROPORTION)
+    price_trim = prices[trim_len:-trim_len]
 
     slope = 0
     intercept = np.mean(prices)
@@ -78,11 +77,11 @@ def fft_price_analysis(
     trendline = line_gen(slope, intercept, price_len)
 
     price_detrended = prices - trendline
-    price_detrended_proportion = price_detrended[proportion_len:-proportion_len]
-    trendline_proportion = trendline[proportion_len:-proportion_len]
+    price_detrended_trim = price_detrended[trim_len:-trim_len]
+    trendline_trim = trendline[trim_len:-trim_len]
 
     price_index = prices.index
-    price_proportion_index = price_proportion.index
+    price_trim_index = price_trim.index
 
     print(f"\n=+=+=+=+=+=+=+=+=+=+= {figname} =+=+=+=+=+=+=+=+=+=+=")
     print(price_detrended)
@@ -102,16 +101,14 @@ def fft_price_analysis(
     print(f"{len(fft_amplitude)=} {fft_amplitude=}")
     fft_amplitude_positive = fft_amplitude[0 : len(fft_amplitude) // 2]
     # printd("PRICES", prices, prices.shape, key_count)
-    df: pd.DataFrame = df_from_ifft_variance(
-        fft, freqs, price_detrended_proportion, proportion_len
-    )
+    df: pd.DataFrame = df_from_ifft_variance(fft, freqs, price_detrended_trim, trim_len)
 
     printd("Sorting variance")
     df = df.sort_values(["variance"], ascending=False)
     printd("Sorted variance")
 
     (
-        majority_price_proportion,  # Price constructed using the most impactful frequencies
+        majority_price,  # Price constructed using the most impactful frequencies
         deviances,
         subset_removed,
         frequencies_kept,
@@ -119,9 +116,9 @@ def fft_price_analysis(
         df,
         fft,
         freqs,
-        price_detrended_proportion,
-        trendline_proportion,
-        proportion_len,
+        price_detrended,
+        trendline,
+        trim_len,
     )
 
     frequencies_kept_amplitude = frequencies_kept * fft_amplitude_positive
@@ -134,8 +131,8 @@ def fft_price_analysis(
     print(
         pd.DataFrame(
             {
-                "Prices": price_detrended_proportion,
-                "Majority": majority_price_proportion,
+                "Prices": price_detrended_trim,
+                "Majority": majority_price,
             }
         )
     )
@@ -156,7 +153,7 @@ def fft_price_analysis(
         min=min(prices),
         max=max(prices),
         diff=max(prices) / min(prices),
-        trend_deviance=deviance_calc(trendline_proportion, 0, price_proportion),
+        trend_deviance=deviance_calc(trendline_trim, 0, price_trim),
     )
 
     plotty = dict(
@@ -171,7 +168,7 @@ def fft_price_analysis(
         trendline=pd.Series(trendline, index=price_index),
         trend_slope=slope,
         trend_intercept=intercept,
-        majority_price_proportion=majority_price_proportion + trendline_proportion,
+        majority_price=majority_price + trendline,
         fft=fft,
         frequencies_kept=frequencies_kept_amplitude,
     )
@@ -183,21 +180,20 @@ def construct_price_significant_frequencies(
     df: pd.DataFrame,
     fft,
     freqs,
-    price_detrended_proportion: pd.Series,
-    trendline_proportion: pd.Series,
-    proportion_len: int,
+    price_detrended: pd.Series,
+    trendline: pd.Series,
+    trim_len: int,
 ):
-    # Running subtraction
-    price_detrended_proportion_add = pd.Series(
-        np.zeros(len(price_detrended_proportion)),
-        index=price_detrended_proportion.index,
+    price_detrended_add = pd.Series(
+        np.zeros(len(price_detrended)),
+        index=price_detrended.index,
     )
-    print("price", price_detrended_proportion)
+    print("price", price_detrended)
     deviances = [
         deviance_calc(
-            price_detrended_proportion_add,
-            trendline_proportion,
-            price_detrended_proportion,
+            price_detrended_add[trim_len:-trim_len],
+            trendline[trim_len:-trim_len],
+            price_detrended[trim_len:-trim_len],
         )
     ]
     count = 0
@@ -210,19 +206,19 @@ def construct_price_significant_frequencies(
     for idx, frequency, variance in df.itertuples(name=None):
         key = idx + 1
         count += 1
-        ifft, base = get_ifft_by_index(fft, key, proportion_len, base)
-        price_detrended_proportion_add = price_detrended_proportion_add + ifft
+        ifft, base = get_ifft_by_index(fft, key, 0, base)
+        price_detrended_add = price_detrended_add + ifft
         deviance = deviance_calc(
-            price_detrended_proportion_add,
-            trendline_proportion,
-            price_detrended_proportion,
+            price_detrended_add[trim_len:-trim_len],
+            trendline[trim_len:-trim_len],
+            price_detrended[trim_len:-trim_len],
         )
         deviances.append(deviance)
         subset_removed.append((df.shape[0] - count) / df.shape[0])
         frequencies_kept.loc[frequency] = 1
         if deviance < PRICE_DEVIANCE_CUTOFF:
             return (
-                price_detrended_proportion_add,
+                price_detrended_add,
                 deviances,
                 subset_removed,
                 frequencies_kept,
@@ -283,7 +279,7 @@ def get_keys(*arr, keep=False):
     return _arr + [x * -1 for x in _arr]
 
 
-def get_ifft_by_key(fft, minute_bucket, key, price_proportion_index, proportion_len):
+def get_ifft_by_key(fft, minute_bucket, key, price_trim_index, trim_len):
     # printd("GET IFFT BY KEY", key)
     # [zero] = minute_bucket[0]
     # printd("ZERO", zero)
@@ -295,13 +291,13 @@ def get_ifft_by_key(fft, minute_bucket, key, price_proportion_index, proportion_
     ifft = np.fft.ifft(keeped)
     # zeroed = np.fft.ifft(np.where(keeped == zero, 0, keeped))
 
-    ifft_proportion = ifft.real[proportion_len:-proportion_len]
-    ifft_series = pd.Series(ifft_proportion, index=price_proportion_index)
+    ifft_trim = ifft.real[trim_len:-trim_len]
+    ifft_series = pd.Series(ifft_trim, index=price_trim_index)
 
     return (key, ifft_series, len(keep_me))
 
 
-def get_ifft_by_index(fft, idx, proportion_len, base=None):
+def get_ifft_by_index(fft, idx, trim_len, base=None):
     if base is None:
         base = np.zeros(len(fft), dtype=np.complex128)
     base[idx] = fft[idx]
@@ -309,69 +305,64 @@ def get_ifft_by_index(fft, idx, proportion_len, base=None):
     ifft = np.fft.ifft(base)
     base[idx] = 0
     base[-idx] = 0
-    ifft_proportion = ifft[proportion_len:-proportion_len]
+    if trim_len == 0:
+        ifft_trim = ifft
+    else:
+        ifft_trim = ifft[trim_len:-trim_len]
 
-    # imaginary_booty = np.argwhere(ifft_proportion.imag > 0.01)
+    # imaginary_booty = np.argwhere(ifft_trim.imag > 0.01)
     # if len(imaginary_booty):
     #     printd(f"============ WARNING BOOTY {idx} TOO BIG ============")
-    #     printd(ifft_proportion[imaginary_booty])
+    #     printd(ifft_trim[imaginary_booty])
 
-    return ifft_proportion.real, base
+    return ifft_trim.real, base
 
 
 @timeme
-def df_from_ifft_variance(
-    fft, freqs, price_detrended_proportion: pd.Series, proportion_len
-):
+def df_from_ifft_variance(fft, freqs, price_detrended_trim: pd.Series, trim_len):
     return pd.DataFrame(
-        iterate_ifft_variance_np(
-            fft, freqs, price_detrended_proportion, proportion_len
-        ),
+        iterate_ifft_variance_np(fft, freqs, price_detrended_trim, trim_len),
         columns=["frequency", "variance"],
     )
 
 
-def iterate_ifft_variance_scp(
-    fft, freq, price_detrended_proportion: pd.Series, proportion_len
-):
+def iterate_ifft_variance_scp(fft, freq, price_detrended_trim: pd.Series, trim_len):
     mid = len(fft) // 2
     base = None
     for idx in range(1, mid):
-        ifft_proportion, base = get_ifft_by_index(fft, idx, proportion_len, base)
-        correlation, pval = stats.pearsonr(
-            price_detrended_proportion.values, ifft_proportion
-        )
+        ifft_trim, base = get_ifft_by_index(fft, idx, trim_len, base)
+        correlation, pval = stats.pearsonr(price_detrended_trim.values, ifft_trim)
         # print(f"scp {correlation=} {pval=}")
         variance = correlation ** 2
         yield freq[idx], variance
 
 
 def iterate_ifft_variance_np(
-    fft, freq, price_detrended_proportion: pd.Series, proportion_len: pd.Series
+    fft, freq, price_detrended_trim: pd.Series, trim_len: pd.Series
 ):
     mid = len(fft) // 2
     base = None
     for idx in range(1, mid):
-        ifft_proportion, base = get_ifft_by_index(fft, idx, proportion_len, base)
+        ifft_trim, base = get_ifft_by_index(fft, idx, trim_len, base)
         """
         Note: This returns a matrix of the shape
         array([ [1.        , 0.37405599],
                 [0.37405599, 1.        ]])
         """
-        correlation = np.corrcoef(price_detrended_proportion.values, ifft_proportion)
+        correlation = np.corrcoef(price_detrended_trim.values, ifft_trim)
         correlation = correlation[0, 1]
         # print(f"np {correlation=}")
         variance = correlation ** 2
         yield freq[idx], variance
 
 
-def iterate_ifft_variance_pd(fft, freq, price_detrended_proportion, proportion_len):
+def iterate_ifft_variance_pd(fft, freq, price_detrended_trim, trim_len):
     mid = len(fft) // 2
     base = None
     for idx in range(1, mid):
-        ifft_proportion, base = get_ifft_by_index(fft, idx, proportion_len, base)
-        ifft_series = pd.Series(ifft_proportion, index=price_detrended_proportion.index)
-        correlation = price_detrended_proportion.corr(ifft_series)
+        ifft_trim, base = get_ifft_by_index(fft, idx, trim_len, base)
+        ifft_series = pd.Series(ifft_trim, index=price_detrended_trim.index)
+        correlation = price_detrended_trim.corr(ifft_series)
         variance = correlation ** 2
         yield freq[idx], variance
 
@@ -421,7 +412,7 @@ def render_charts(
     price,
     price_detrended,
     trendline,
-    majority_price_proportion,
+    majority_price,
     fft,
     frequencies_kept,
     **kwargs,
@@ -434,7 +425,7 @@ def render_charts(
         price,
         price_chart=[
             # ("detrended", price_detrended),
-            ("majority", majority_price_proportion),
+            ("majority", majority_price),
             ("trendline", trendline),
         ],
         # price_chart=[
@@ -583,7 +574,9 @@ def parallel_handler(tasks):
         return [fft_price_analysis(*task["args"], **task["kwargs"]) for task in tasks]
 
 
-def gen_tasks(start, length, count=8, end=None, overlap=None, detrend=True):
+def gen_tasks(
+    start, length, count=8, end=None, overlap=None, detrend=True, pair="XBTUSD"
+):
     start = pd.to_datetime(start)
     if end is not None:
         # Todo: see if end is time delta or datetime, use to generate count
@@ -599,10 +592,12 @@ def gen_tasks(start, length, count=8, end=None, overlap=None, detrend=True):
         }
 
 
-def main(start, timecap, count, overlap, detrend):
+def main(start, timecap, count, overlap, detrend, pair):
 
     tasks = list(
-        gen_tasks(start, timecap, count=count, overlap=overlap, detrend=detrend)
+        gen_tasks(
+            start, timecap, count=count, overlap=overlap, detrend=detrend, pair=pair
+        )
     )
     results = parallel_handler(tasks)
     if results is None:
@@ -619,7 +614,12 @@ def main(start, timecap, count, overlap, detrend):
 
 if __name__ == "__main__":
     inputs = dict(
-        start="2020-05-01", timecap="1d", count=365, overlap="18h", detrend=True
+        start="2020-05-01",
+        timecap="1d",
+        count=365,
+        overlap="18h",
+        detrend=True,
+        pair="XBTUSD",
     )
     data, charts, aggregate = main(**inputs)
 

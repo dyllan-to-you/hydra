@@ -1,11 +1,26 @@
 import math
 import plotly.graph_objects as go
+import matplotlib
 import pandas as pd
+from plotly.subplots import make_subplots
 import hydra.utils as utils
 from datetime import datetime, timedelta
 from hydra.DataLoader import load_prices
 
 intervals = [1, 5, 15, 60, 720, 1440]
+
+
+def matplotlib_to_plotly(cmap_name, pl_entries):
+    cmap = matplotlib.cm.get_cmap(cmap_name)
+
+    h = 1.0 / (pl_entries - 1)
+    pl_colorscale = []
+
+    for k in range(pl_entries):
+        C = map(np.uint8, np.array(cmap(k * h)[:3]) * 255)
+        pl_colorscale.append([k * h, "rgb" + str((C[0], C[1], C[2]))])
+
+    return pl_colorscale
 
 
 def gen_data_interval(data, interval):
@@ -106,7 +121,7 @@ def get_price_trace(pair, startDate, endDate):
 # DONE: move lingering variables into attributes
 # DONE: Put start/end date into attribute
 # DONE: Use class in `environments.ipynb` to render trendline
-# TODO: Render fft aggregate
+# DONE: Render fft aggregate
 # TODO: extrapolate fft aggregate (just render min/max prediction)
 # TODO: Predictive ability metrics
 # TODO: Mix predictions with aroons for fun and profit
@@ -120,18 +135,24 @@ class PlotlyPriceChart:
         self.handle_list = []
         self.handler = self.handler_factory()
         self.figure: go.FigureWidget = None
-        self.generate_figure(pair, startDate, endDate)
+        self.startDate = startDate
+        self.endDate = endDate
+        self.generate_figure(pair)
 
-    def add_trace(self, trace, data, fields, startDate, endDate):
-        self.figure.add_trace(trace)
-        update_candlestick = data_extrapolator(
-            data,
-            self.figure,
-            self.data_idx,
-            fields,
-        )
+    def add_trace(self, trace, data=None, fields=None, loc=(2, 1), **kwargs):
+        if "log" in kwargs:
+            print("add_trace", trace, data, fields, loc)
+        row, col = loc
+        self.figure.add_trace(trace, row=row, col=col)
+        if data is not None and trace is not None:
+            update_candlestick = data_extrapolator(
+                data,
+                self.figure,
+                self.data_idx,
+                fields,
+            )
 
-        self.register_handler(update_candlestick, startDate, endDate)
+            self.register_handler(update_candlestick)
         self.data_idx += 1
 
     def handler_factory(self):
@@ -142,26 +163,15 @@ class PlotlyPriceChart:
 
         return handler
 
-    def register_handler(self, fn, startDate, endDate):
-        fn(startDate, endDate)
+    def register_handler(self, fn):
+        fn(self.startDate, self.endDate)
         self.handle_list.append(fn)
         self.figure.layout.on_change(self.handler, "xaxis")
 
-    def generate_figure(self, pair, startDate, endDate):
-        self.figure = go.FigureWidget(
-            data=[],
-            # data=[candlestick],
-            layout=go.Layout(
-                title=dict(text="FLYBABYFLY"),
-                barmode="overlay",
-                yaxis={"fixedrange": False},
-                yaxis2=dict(
-                    fixedrange=False,
-                    domain=[0, 1],
-                ),
-            ),
-        )
-        candlestick, prices = get_price_trace(pair, startDate, endDate)
+    def generate_figure(self, pair):
+        self.figure = go.FigureWidget(make_subplots(rows=2, cols=1, shared_xaxes=True))
+
+        candlestick, prices = get_price_trace(pair, self.startDate, self.endDate)
         self.add_trace(
             candlestick,
             prices,
@@ -172,11 +182,24 @@ class PlotlyPriceChart:
                 "low": "low",
                 "close": "close",
             },
-            startDate,
-            endDate,
         )
 
         return self
+
+    def render(self):
+        self.figure.update_layout(
+            go.Layout(
+                title=dict(text="FLYBABYFLY"),
+                barmode="overlay",
+                yaxis2={"fixedrange": False},
+                height=800
+                # yaxis2=dict(
+                #     fixedrange=False,
+                #     domain=[0, 1],
+                # ),
+            )
+        )
+        return self.figure
 
 
 # def add_handler(handler):

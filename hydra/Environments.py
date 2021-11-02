@@ -3,6 +3,7 @@ import os
 import sys
 import traceback
 import pickle
+import wave
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -12,6 +13,7 @@ from pandas.core.frame import DataFrame
 import ray
 from scipy import stats
 import seaborn as sns
+from toolz.itertoolz import frequencies
 
 from hydra.DataLoader import load_prices
 from hydra.utils import printd, timeme
@@ -63,6 +65,8 @@ def fft_price_analysis(
     if price_len % 2 == 1:
         prices = prices.iloc[:-1]
         price_len = len(prices)
+    endDate = prices.index[-1]
+
     trim_len = round(price_len * PROPORTION)
     price_trim = prices[trim_len:-trim_len]
 
@@ -74,7 +78,8 @@ def fft_price_analysis(
             np.array(range(price_len)),
             prices,
         )
-    trendline = line_gen(slope, intercept, price_len)
+    line_gen = date_line_gen_factory(slope, intercept, startDate)
+    trendline = line_gen(startDate, endDate)
 
     price_detrended = prices - trendline
     price_detrended_trim = price_detrended[trim_len:-trim_len]
@@ -84,31 +89,20 @@ def fft_price_analysis(
     price_trim_index = price_trim.index
 
     print(f"\n=+=+=+=+=+=+=+=+=+=+= {figname} =+=+=+=+=+=+=+=+=+=+=")
+    print("TREND", trendline, len(trendline), startDate, endDate)
     print(price_detrended)
     valuable_info = transform(price_detrended, time_step)
     fft, freqs, index, powers = valuable_info
     print(f"{len(fft)=} {fft=}")
     print(f"{len(freqs)=} {freqs=}")
-    fft_amplitude = (
-        np.sqrt((np.abs(fft.real) / len(fft)) ** 2 + (np.abs(fft.imag) / len(fft)) ** 2)
-        * 2  # Since the power is split between positive and negative freq, multiply by 2
-    )
 
-    if normalize_amplitude:
-        fft_amplitude_sum = np.sum(fft_amplitude)
-        fft_amplitude = fft_amplitude / fft_amplitude_sum
-
-    print(f"{len(fft_amplitude)=} {fft_amplitude=}")
-    fft_amplitude_positive = fft_amplitude[0 : len(fft_amplitude) // 2]
     # printd("PRICES", prices, prices.shape, key_count)
     df: pd.DataFrame = df_from_ifft_variance(fft, freqs, price_detrended_trim, trim_len)
 
-    printd("Sorting variance")
-    df = df.sort_values(["variance"], ascending=False)
-    printd("Sorted variance")
+    df["min/cycle"] = np.round(1440 / df["frequency"].to_numpy())
 
     (
-        majority_price,  # Price constructed using the most impactful frequencies
+        approximated_price,  # Price constructed using the most impactful frequencies
         deviances,
         subset_removed,
         frequencies_kept,
@@ -120,9 +114,20 @@ def fft_price_analysis(
         trendline,
         trim_len,
     )
+    frequencies_kept.name = startDate
 
-    frequencies_kept_amplitude = frequencies_kept * fft_amplitude_positive
+    print("FREQUENCY =================================")
+    print(frequencies_kept)
 
+    # max_amplitude_ifft=None
+
+    (
+        ifft_extrapolated,
+        ifft_extrapolated_trended,
+        (extrapolated_up_trend, extrapolated_down_trend),
+    ) = extrapolate_ifft(frequencies_kept, fft, prices.index, trendline_gen=line_gen)
+
+    print("RESULTS ==========================")
     print(
         pd.DataFrame(
             {"Deviance": pd.Series(deviances), "Removed": pd.Series(subset_removed)}
@@ -131,8 +136,8 @@ def fft_price_analysis(
     print(
         pd.DataFrame(
             {
-                "Prices": price_detrended_trim,
-                "Majority": majority_price,
+                "Prices": price_detrended,
+                "Approximated": approximated_price,
             }
         )
     )
@@ -146,7 +151,7 @@ def fft_price_analysis(
         ],
         df.shape,
     )
-    print("kept", frequencies_kept_amplitude)
+    print("kept", frequencies_kept)
 
     interesting = dict(
         index=figname,
@@ -168,11 +173,92 @@ def fft_price_analysis(
         trendline=pd.Series(trendline, index=price_index),
         trend_slope=slope,
         trend_intercept=intercept,
-        majority_price=majority_price + trendline,
+        approximated_price=approximated_price + trendline,
+        detrended_approximated_price=approximated_price,
         fft=fft,
-        frequencies_kept=frequencies_kept_amplitude,
+        frequencies_kept=frequencies_kept,
+        extrapolated=ifft_extrapolated_trended,
+        extrapolated_up=extrapolated_up_trend,
+        extrapolated_down=extrapolated_down_trend,
     )
     return interesting, plotty
+
+
+def extrapolate_ifft(df: pd.DataFrame, fft: np.ndarray, datetime_index, trendline_gen):
+    key = df["amplitude"].idxmax()
+    row = df.loc[key]
+    print("EXTRAPOLATE ========================")
+    print(row)
+
+    ifft = pd.Series(get_ifft_by_index(fft, key, 0)[0], index=datetime_index)
+    wavelength = pd.to_timedelta(row["min/cycle"], unit="m")
+    last_cycle_start = datetime_index[-1] - wavelength
+    last_cycle = ifft[last_cycle_start:]
+    last_max_idx = last_cycle.idxmax()
+    last_min_idx = last_cycle.idxmin()
+    delta = abs(last_max_idx - last_min_idx)
+    if delta != wavelength / 2:
+        print("WARNING: delta != wavelength/2", delta, wavelength)
+
+    endpoint = datetime_index[-1] + (datetime_index[-1] - datetime_index[0])
+
+    print(f"{last_min_idx=} {last_max_idx=} {endpoint=}")
+    trendline = trendline_gen(datetime_index[0], datetime_index[-1], index=True)
+
+    extrapolated_trendline = trendline_gen(
+        min(last_min_idx, last_max_idx) + wavelength,
+        endpoint,
+        interval=delta.total_seconds() / 60,
+        index=True,
+    )
+
+    extras = []
+    start_pole = 1 if last_max_idx < last_min_idx else -1
+    cycle_end = extrapolated_trendline.index[1]
+    for date in extrapolated_trendline.index:
+        extras.append(row["amplitude"] * start_pole)
+        start_pole *= -1
+        if date == cycle_end:
+            break
+
+    extrapolated = pd.Series(extras, extrapolated_trendline.index)
+    extrapolated_trended = extrapolated + extrapolated_trendline
+    up = extrapolated_trended[extrapolated > 0]
+    down = extrapolated_trended[extrapolated < 0]
+    print("LAST CYCLE", trendline.loc[[last_max_idx, last_min_idx]])
+    print("EXTRPOLATD", extrapolated)
+    return (
+        extrapolated,
+        extrapolated_trended,
+        (up, down),
+    )  # pd.concat([ifft, extrapolated])
+
+
+"""
+    extra_up = []
+    extra_down = []
+    start_pole = 1 if last_max_idx < last_min_idx else -1
+    for date in extrapolated_trendline.index:
+        val = row["amplitude"] * start_pole
+        if val > 0:
+            extra_up.append((date, val))
+        else:
+            extra_down.append((date, val))
+        start_pole *= -1
+
+    # extrapolated = pd.Series(extras, extrapolated_trendline.index)
+    extrapolated_up = pd.Series(extra_up)
+    extrapolated_down = pd.Series(extra_down)
+    extrapolated = pd.Series(dict([*extrapolated_down, *extrapolated_up]))
+    print("LAST CYCLE", trendline.loc[[last_max_idx, last_min_idx]])
+    print("EXTRPOLATD", extrapolated)
+    print(
+        "up",
+        extrapolated_up,
+    )
+    print("dwn", extrapolated_down)
+    return extrapolated, extrapolated_trendline  # pd.concat([ifft, extrapolated])
+"""
 
 
 @timeme
@@ -181,7 +267,7 @@ def construct_price_significant_frequencies(
     fft,
     freqs,
     price_detrended: pd.Series,
-    trendline: pd.Series,
+    trendline: np.ndarray,
     trim_len: int,
 ):
     price_detrended_add = pd.Series(
@@ -198,15 +284,16 @@ def construct_price_significant_frequencies(
     ]
     count = 0
     subset_removed = [1]
-    freqs_pos = freqs[freqs >= 0]
-    frequencies_kept = pd.Series(np.zeros(len(freqs_pos)), index=freqs_pos)
-    frequencies_kept.index.rename("frequency", inplace=True)
+
+    df["keep"] = np.zeros(len(df), dtype=bool)
     print(df)
-    base = None
-    for idx, frequency, variance in df.itertuples(name=None):
-        key = idx + 1
+
+    empty_fft = None
+    for key, frequency, *_ in df.sort_values(["variance"], ascending=False).itertuples(
+        name=None
+    ):
         count += 1
-        ifft, base = get_ifft_by_index(fft, key, 0, base)
+        ifft, empty_fft = get_ifft_by_index(fft, key, 0, empty_fft)
         price_detrended_add = price_detrended_add + ifft
         deviance = deviance_calc(
             price_detrended_add[trim_len:-trim_len],
@@ -215,14 +302,10 @@ def construct_price_significant_frequencies(
         )
         deviances.append(deviance)
         subset_removed.append((df.shape[0] - count) / df.shape[0])
-        frequencies_kept.loc[frequency] = 1
+        df.loc[key, "keep"] = True
         if deviance < PRICE_DEVIANCE_CUTOFF:
-            return (
-                price_detrended_add,
-                deviances,
-                subset_removed,
-                frequencies_kept,
-            )
+            keep = df[df["keep"]].drop("keep", axis=1)
+            return (price_detrended_add, deviances, subset_removed, keep)
 
 
 def transform(values, time_step):
@@ -297,53 +380,48 @@ def get_ifft_by_key(fft, minute_bucket, key, price_trim_index, trim_len):
     return (key, ifft_series, len(keep_me))
 
 
-def get_ifft_by_index(fft, idx, trim_len, base=None):
-    if base is None:
-        base = np.zeros(len(fft), dtype=np.complex128)
-    base[idx] = fft[idx]
-    base[-idx] = fft[-idx]
-    ifft = np.fft.ifft(base)
-    base[idx] = 0
-    base[-idx] = 0
+def get_ifft_by_index(fft, idx, trim_len, empty_fft=None):
+    if empty_fft is None:
+        empty_fft = np.zeros(len(fft), dtype=np.complex128)
+    empty_fft[idx] = fft[idx]
+    empty_fft[-idx] = fft[-idx]
+    ifft = np.fft.ifft(empty_fft)
+    empty_fft[idx] = 0
+    empty_fft[-idx] = 0
     if trim_len == 0:
         ifft_trim = ifft
     else:
         ifft_trim = ifft[trim_len:-trim_len]
 
-    # imaginary_booty = np.argwhere(ifft_trim.imag > 0.01)
-    # if len(imaginary_booty):
-    #     printd(f"============ WARNING BOOTY {idx} TOO BIG ============")
-    #     printd(ifft_trim[imaginary_booty])
+    imaginary_booty = np.argwhere(ifft_trim.imag > 0.01)
+    if len(imaginary_booty):
+        printd(f"============ WARNING BOOTY {idx} TOO BIG ============")
+        printd(ifft_trim[imaginary_booty])
 
-    return ifft_trim.real, base
+    return ifft_trim.real, empty_fft
 
 
 @timeme
 def df_from_ifft_variance(fft, freqs, price_detrended_trim: pd.Series, trim_len):
     return pd.DataFrame(
         iterate_ifft_variance_np(fft, freqs, price_detrended_trim, trim_len),
-        columns=["frequency", "variance"],
-    )
-
-
-def iterate_ifft_variance_scp(fft, freq, price_detrended_trim: pd.Series, trim_len):
-    mid = len(fft) // 2
-    base = None
-    for idx in range(1, mid):
-        ifft_trim, base = get_ifft_by_index(fft, idx, trim_len, base)
-        correlation, pval = stats.pearsonr(price_detrended_trim.values, ifft_trim)
-        # print(f"scp {correlation=} {pval=}")
-        variance = correlation ** 2
-        yield freq[idx], variance
+        columns=["key", "frequency", "variance", "amplitude", "amplitude_normalized"],
+    ).set_index("key")
 
 
 def iterate_ifft_variance_np(
     fft, freq, price_detrended_trim: pd.Series, trim_len: pd.Series
 ):
     mid = len(fft) // 2
-    base = None
+    empty_fft = None
+    fft_amplitude = (
+        np.sqrt((np.abs(fft.real) / len(fft)) ** 2 + (np.abs(fft.imag) / len(fft)) ** 2)
+        * 2  # Since the power is split between positive and negative freq, multiply by 2
+    )
+    fft_amplitude_sum = np.sum(fft_amplitude)
+    fft_amplitude_normalized = fft_amplitude / fft_amplitude_sum
     for idx in range(1, mid):
-        ifft_trim, base = get_ifft_by_index(fft, idx, trim_len, base)
+        ifft_trim, empty_fft = get_ifft_by_index(fft, idx, trim_len, empty_fft)
         """
         Note: This returns a matrix of the shape
         array([ [1.        , 0.37405599],
@@ -353,22 +431,14 @@ def iterate_ifft_variance_np(
         correlation = correlation[0, 1]
         # print(f"np {correlation=}")
         variance = correlation ** 2
-        yield freq[idx], variance
-
-
-def iterate_ifft_variance_pd(fft, freq, price_detrended_trim, trim_len):
-    mid = len(fft) // 2
-    base = None
-    for idx in range(1, mid):
-        ifft_trim, base = get_ifft_by_index(fft, idx, trim_len, base)
-        ifft_series = pd.Series(ifft_trim, index=price_detrended_trim.index)
-        correlation = price_detrended_trim.corr(ifft_series)
-        variance = correlation ** 2
-        yield freq[idx], variance
+        yield idx, freq[idx], variance, fft_amplitude[idx], fft_amplitude_normalized[
+            idx
+        ]
 
 
 def date_line_gen_factory(slope, intercept, originalStartDate, *args, **kwargs):
-    def date_line_gen(start, end, interval):
+    def date_line_gen(start, end, interval=1, index=False, inclusive=True):
+        interval = int(interval)
         startDate = pd.to_datetime(start)
         startDelta = startDate - originalStartDate
         startDelta_m = startDelta.total_seconds() / 60
@@ -377,14 +447,28 @@ def date_line_gen_factory(slope, intercept, originalStartDate, *args, **kwargs):
         delta = endDate - originalStartDate
         delta_m = delta.total_seconds() / 60
 
-        return line_gen(
-            slope, intercept, start=startDelta_m, stop=delta_m, interval=interval
+        line = line_generator(
+            slope,
+            intercept,
+            start=startDelta_m,
+            stop=delta_m,
+            interval=interval,
+            inclusive=inclusive,
         )
+        if not index:
+            return line
+        idx = pd.date_range(startDate, endDate, freq=f"{interval}min")
+        return pd.Series(line, idx)
 
     return date_line_gen
 
 
-def line_gen(slope, intercept, stop, start=None, interval=1):
+def line_generator(
+    slope, intercept, stop, start=None, interval=1, inclusive=True
+) -> np.ndarray:
+    interval = int(interval)
+    if inclusive:
+        stop = stop + 1
     if start is None:
         return np.arange(stop, step=interval) * slope + intercept
     else:
@@ -412,7 +496,7 @@ def render_charts(
     price,
     price_detrended,
     trendline,
-    majority_price,
+    approximated_price,
     fft,
     frequencies_kept,
     **kwargs,
@@ -425,7 +509,7 @@ def render_charts(
         price,
         price_chart=[
             # ("detrended", price_detrended),
-            ("majority", majority_price),
+            ("approximated", approximated_price),
             ("trendline", trendline),
         ],
         # price_chart=[
@@ -463,7 +547,7 @@ def render_price_chart(
 def bucket_frequencies(frequencies) -> pd.DataFrame:
     df = frequencies.copy()
     # print(df)
-    df["min/cycle"] = np.round(1440 / frequencies.index.to_numpy())
+    # df["min/cycle"] = frequencies.index  # np.round(1440 / frequencies.index.to_numpy())
     df = df.iloc[::-1]
     # df["diff"] = df["min/cycle"].diff()
     # df["diff%"] = df["diff"].div(df["min/cycle"].shift(1))
@@ -478,7 +562,7 @@ def bucket_frequencies(frequencies) -> pd.DataFrame:
     start = None
     last = None
     acc = 0
-    for minutes, group in df.groupby("min/cycle"):
+    for minutes, group in df.groupby(df.index):
         agg.append(group)
         if last is None:
             start = last = minutes
@@ -500,7 +584,7 @@ def bucket_frequencies(frequencies) -> pd.DataFrame:
             continue
         last = minutes
     bucketed: pd.DataFrame = pd.concat(buckets)
-    bucketed = bucketed.drop(columns=["min/cycle"])
+    # bucketed = bucketed.drop(columns=["min/cycle"])
     label_map = bucketed[["label"]]
     label_map = label_map.droplevel(1).drop_duplicates()
     # print(label_map)
@@ -511,9 +595,21 @@ def bucket_frequencies(frequencies) -> pd.DataFrame:
 
 
 def process_aggregate(data, chart):
-    frequencies_kept_df = pd.DataFrame()
-    for d in chart:
-        frequencies_kept_df[d["fig_dates"]] = d["frequencies_kept"]
+    print("PROCESS AGGREGATE =======")
+
+    frequencies_kept_df = pd.concat(
+        [
+            pd.Series(
+                #
+                data=d["frequencies_kept"]["amplitude_normalized"].values,
+                index=d["frequencies_kept"]["frequency"],
+                name=d["startDate"],
+            )
+            for d in chart
+        ],
+        axis=1,
+    )
+    print(frequencies_kept_df)
     frequencies_kept_df = frequencies_kept_df.replace(0, np.nan)
     first_idx = frequencies_kept_df.first_valid_index()
     last_idx = frequencies_kept_df.last_valid_index()
@@ -523,7 +619,10 @@ def process_aggregate(data, chart):
     maxes = frequencies_kept_df.max(axis=1)
     frequencies_kept_df = frequencies_kept_df.divide(maxes, axis=0)
 
-    return frequencies_kept_df
+    return dict(
+        values=pd.concat([d["frequencies_kept"] for d in chart], axis=1),
+        normalized=frequencies_kept_df,
+    )
 
 
 def render_agg_chart(frequencies_kept_df):
@@ -634,5 +733,5 @@ if __name__ == "__main__":
     for chart in charts:
         if np.count_nonzero(chart["frequencies_kept"]) < 3:
             render_charts(**chart)
-    render_agg_chart(aggregate)
+    render_agg_chart(aggregate["normalized"])
     plt.show()

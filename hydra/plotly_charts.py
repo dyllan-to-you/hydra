@@ -64,7 +64,7 @@ def data_extrapolator(data, figure, trace_idx, fields):
     resample = data_resample_factory(data)
 
     def slicer(start, end):
-        size = 500
+        size = 250
         start_date = pd.to_datetime(start)
         end_date = pd.to_datetime(end)
         delta = end_date - start_date
@@ -122,7 +122,24 @@ def get_price_trace(pair, startDate, endDate):
 # DONE: Put start/end date into attribute
 # DONE: Use class in `environments.ipynb` to render trendline
 # DONE: Render fft aggregate
-# TODO: extrapolate fft aggregate (just render min/max prediction)
+# DONE: Replace complexity chart with heatmap
+"""
+TODO: extrapolate fft aggregate (just render min/max prediction)
+- Take IFFT
+- detrend
+- get last min/max value & index
+    - take abs value
+    - reverse
+    - get index of max value
+    - real_index = len - index
+    - check detrended_ifft[real_index] to determine whether it was a min or a max
+- get largest amplitude from original 
+- alternate adding/subtracting the amplitude (min/max value?) 
+    every frequency/2 points after the last min/max 
+- Retrend
+- Return
+
+"""
 # TODO: Predictive ability metrics
 # TODO: Mix predictions with aroons for fun and profit
 # TODO: ???
@@ -139,11 +156,19 @@ class PlotlyPriceChart:
         self.endDate = endDate
         self.generate_figure(pair)
 
-    def add_trace(self, trace, data=None, fields=None, loc=(2, 1), **kwargs):
+    def add_trace(
+        self,
+        trace,
+        data=None,
+        fields={"x": "index", "y": "values"},
+        loc=(2, 1),
+        traceArgs={},
+        **kwargs,
+    ):
         if "log" in kwargs:
             print("add_trace", trace, data, fields, loc)
         row, col = loc
-        self.figure.add_trace(trace, row=row, col=col)
+        self.figure.add_trace(trace, row=row, col=col, **traceArgs)
         if data is not None and trace is not None:
             update_candlestick = data_extrapolator(
                 data,

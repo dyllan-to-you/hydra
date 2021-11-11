@@ -23,74 +23,49 @@ def matplotlib_to_plotly(cmap_name, pl_entries):
     return pl_colorscale
 
 
-def gen_data_interval(data, interval):
-    res = data.get(interval)
-    if res is None:
-        for i in intervals:
-            base = data.get(i)
-            if base is not None:
-                res = base.resample(f"{interval}m")
-                data[interval] = res
-                break
-    return res
-
-
-def supersample_data(data, interval):
+def supersample_data(
+    data, interval, useIntervals=[], alwaysUseData=False, approximate=False
+):
     res = {interval: data}
     for i in intervals:
         if i not in res:
-            res[i] = data.resample(f"{i}T").asfreq()
+            if alwaysUseData:
+                res[i] = data if i in useIntervals else pd.Series()
+            else:
+                if approximate:
+                    res[i] = (
+                        data.round(f"{i}min").avg()
+                        if i in useIntervals
+                        else pd.Series()
+                    )
+                else:
+                    res[i] = (
+                        data.resample(f"{i}min").asfreq()
+                        if i in useIntervals
+                        else pd.Series()
+                    )
             # print("res", i, f"{interval}T", res[i])
     return res
 
 
-def data_resample_factory(data: "dict[int, pd.DataFrame]"):
-    def resample_data(start_date, end_date, interval, size):
-        fakestart = start_date - timedelta(minutes=interval * math.ceil(size / 2))
-        fakeend = end_date + timedelta(minutes=interval * math.ceil(size / 2))
+def data_resample_factory(data: "dict[int, pd.DataFrame]", onlySlice=False):
+    def resample_data(start_date, end_date, interval):
+        window_size = end_date - start_date
+        fakestart = start_date - window_size
+        fakeend = end_date + window_size
         interval_data = data[interval]
         precise_data = interval_data.loc[fakestart:fakeend]
-        big_data = data[intervals[-1]]
-        the_data = pd.concat(
-            [big_data.loc[:fakestart], big_data.loc[fakeend:], precise_data]
-        ).sort_index()
+        if onlySlice:
+            return precise_data
+        else:
+            big_data = data[intervals[-1]]
+            the_data = pd.concat(
+                [big_data.loc[:fakestart], big_data.loc[fakeend:], precise_data]
+            ).sort_index()
 
         return the_data
 
     return resample_data
-
-
-def data_extrapolator(data, figure, trace_idx, fields):
-    resample = data_resample_factory(data)
-
-    def slicer(start, end):
-        size = 250
-        start_date = pd.to_datetime(start)
-        end_date = pd.to_datetime(end)
-        delta = end_date - start_date
-        delta_m = delta.total_seconds() / 60
-
-        interval = intervals[-1]
-        for i in intervals:
-            if delta_m <= size * i:
-                interval = i
-                break
-
-        the_data = resample(start_date, end_date, interval, size)
-        # f = open('log.txt', "a")
-        # f.write(f"[{utils.now()}] {start} {end} {delta} {delta_m} {interval} \n{precise_price} \n {fakestart} {fakeend} \n{the_price.loc[fakestart:fakeend]}\n")
-        # f.close()
-        trace = figure.data[trace_idx]
-        with figure.batch_update():
-            for key, val in fields.items():
-                try:
-                    value = getattr(the_data, val)
-                except:
-                    value = the_data[val]
-
-                setattr(trace, key, value)
-
-    return slicer
 
 
 def get_price_trace(pair, startDate, endDate):
@@ -156,6 +131,34 @@ class PlotlyPriceChart:
         self.endDate = endDate
         self.generate_figure(pair)
 
+    def slicer(self, start, end):
+        size = 250
+        start_date = pd.to_datetime(start)
+        end_date = pd.to_datetime(end)
+        delta = end_date - start_date
+        delta_m = delta.total_seconds() / 60
+
+        interval = intervals[-1]
+        for i in intervals:
+            if delta_m <= size * i:
+                interval = i
+                break
+
+        # f = open('log.txt', "a")
+        # f.write(f"[{utils.now()}] {start} {end} {delta} {delta_m} {interval} \n{precise_price} \n {fakestart} {fakeend} \n{the_price.loc[fakestart:fakeend]}\n")
+        # f.close()
+        with self.figure.batch_update():
+            for resample, trace_idx, fields in self.handle_list:
+                the_data = resample(start_date, end_date, interval)
+                trace = self.figure.data[trace_idx]
+                for key, val in fields.items():
+                    try:
+                        value = getattr(the_data, val)
+                    except:
+                        value = the_data[val]
+
+                    setattr(trace, key, value)
+
     def add_trace(
         self,
         trace,
@@ -163,6 +166,7 @@ class PlotlyPriceChart:
         fields={"x": "index", "y": "values"},
         loc=(2, 1),
         traceArgs={},
+        onlySlice=False,
         **kwargs,
     ):
         if "log" in kwargs:
@@ -170,27 +174,21 @@ class PlotlyPriceChart:
         row, col = loc
         self.figure.add_trace(trace, row=row, col=col, **traceArgs)
         if data is not None and trace is not None:
-            update_candlestick = data_extrapolator(
-                data,
-                self.figure,
-                self.data_idx,
-                fields,
+            self.register_handler(
+                (data_resample_factory(data, onlySlice), self.data_idx, fields)
             )
-
-            self.register_handler(update_candlestick)
         self.data_idx += 1
 
     def handler_factory(self):
         def handler(obj, xrange):
             [start, end] = xrange.range
-            for fn in self.handle_list:
-                fn(start, end)
+            self.slicer(start, end)
 
         return handler
 
-    def register_handler(self, fn):
-        fn(self.startDate, self.endDate)
-        self.handle_list.append(fn)
+    def register_handler(self, data):
+        self.handle_list.append(data)
+        self.slicer(self.startDate, self.endDate)
         self.figure.layout.on_change(self.handler, "xaxis")
 
     def generate_figure(self, pair):

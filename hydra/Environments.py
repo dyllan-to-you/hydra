@@ -46,12 +46,12 @@ def fft_price_analysis(
     endDate=None,
     detrend=False,
     buckets=False,
-    timecap=None,
+    window=None,
     normalize_amplitude=True,
 ):
     startDate = pd.to_datetime(startDate)
-    if timecap is not None:
-        delta = pd.to_timedelta(timecap)
+    if window is not None:
+        delta = pd.to_timedelta(window)
         endDate = startDate + delta
     endDate = pd.to_datetime(endDate)
     time_step = 1 / 60 / 24
@@ -124,7 +124,9 @@ def fft_price_analysis(
     (
         ifft_extrapolated,
         ifft_extrapolated_trended,
-        (extrapolated_up_trend, extrapolated_down_trend),
+        ifft_extrapolated_wavelength,
+        ifft_extrapolated_amplitude,
+        first_extrapolated,
     ) = extrapolate_ifft(frequencies_kept, fft, prices.index, trendline_gen=line_gen)
 
     print("RESULTS ==========================")
@@ -178,8 +180,9 @@ def fft_price_analysis(
         fft=fft,
         frequencies_kept=frequencies_kept,
         extrapolated=ifft_extrapolated_trended,
-        extrapolated_up=extrapolated_up_trend,
-        extrapolated_down=extrapolated_down_trend,
+        extrapolated_wavelength=ifft_extrapolated_wavelength,
+        extrapolated_amplitude=ifft_extrapolated_amplitude,
+        first_extrapolated=first_extrapolated,
     )
     return interesting, plotty
 
@@ -214,23 +217,20 @@ def extrapolate_ifft(df: pd.DataFrame, fft: np.ndarray, datetime_index, trendlin
 
     extras = []
     start_pole = 1 if last_max_idx < last_min_idx else -1
-    cycle_end = extrapolated_trendline.index[1]
     for date in extrapolated_trendline.index:
         extras.append(row["amplitude"] * start_pole)
         start_pole *= -1
-        if date == cycle_end:
-            break
 
     extrapolated = pd.Series(extras, extrapolated_trendline.index)
     extrapolated_trended = extrapolated + extrapolated_trendline
-    up = extrapolated_trended[extrapolated > 0]
-    down = extrapolated_trended[extrapolated < 0]
     print("LAST CYCLE", trendline.loc[[last_max_idx, last_min_idx]])
     print("EXTRPOLATD", extrapolated)
     return (
         extrapolated,
         extrapolated_trended,
-        (up, down),
+        wavelength,
+        row["amplitude"],
+        (extrapolated_trended[0], extrapolated_trended.index[0], extrapolated[0] > 0),
     )  # pd.concat([ifft, extrapolated])
 
 
@@ -572,7 +572,7 @@ def bucket_frequencies(frequencies) -> pd.DataFrame:
         acc += (minutes - last) / last
 
         if acc > 0.1:
-            label = f"{start}-{minutes}"
+            label = f"{round(start,3)}-{round(minutes,3)}"
             catted = pd.concat(agg)
             catted["label"] = label
             buckets[start] = catted
@@ -609,7 +609,7 @@ def process_aggregate(data, chart):
         ],
         axis=1,
     )
-    print(frequencies_kept_df)
+    # print(frequencies_kept_df)
     frequencies_kept_df = frequencies_kept_df.replace(0, np.nan)
     first_idx = frequencies_kept_df.first_valid_index()
     last_idx = frequencies_kept_df.last_valid_index()
@@ -673,29 +673,33 @@ def parallel_handler(tasks):
         return [fft_price_analysis(*task["args"], **task["kwargs"]) for task in tasks]
 
 
-def gen_tasks(
-    start, length, count=8, end=None, overlap=None, detrend=True, pair="XBTUSD"
-):
+def gen_tasks(start, end, window, overlap=None, detrend=True, pair="XBTUSD"):
     start = pd.to_datetime(start)
+    end = pd.to_datetime(end)
     if end is not None:
         # Todo: see if end is time delta or datetime, use to generate count
         pass
-    delta = pd.to_timedelta(length)
+    delta = pd.to_timedelta(window)
     if overlap is not None:
-        delta -= pd.to_timedelta(overlap)
-    for i in range(count):
+        delta *= 1 - overlap
+        delta = delta.round("1min")
+    startDate = start
+    i = 0
+    while startDate < end:
         startDate = start + i * delta
+        i += 1
+        i = i + 1
         yield {
             "args": (pair, startDate),
-            "kwargs": {"detrend": detrend, "timecap": length},
+            "kwargs": {"detrend": detrend, "window": window},
         }
 
 
-def main(start, timecap, count, overlap, detrend, pair):
+def main(start, end, window, overlap, detrend, pair):
 
     tasks = list(
         gen_tasks(
-            start, timecap, count=count, overlap=overlap, detrend=detrend, pair=pair
+            start, end, window=window, overlap=overlap, detrend=detrend, pair=pair
         )
     )
     results = parallel_handler(tasks)
@@ -713,22 +717,22 @@ def main(start, timecap, count, overlap, detrend, pair):
 
 if __name__ == "__main__":
     inputs = dict(
-        start="2020-05-01",
-        timecap="1d",
-        count=365,
-        overlap="18h",
+        start="2019-01-01",
+        end="2020-12-01",
+        window="1d",
+        overlap=0.99,
         detrend=True,
         pair="XBTUSD",
     )
     data, charts, aggregate = main(**inputs)
 
-    filename = f"{inputs['start']} {inputs['timecap']} count={inputs['count']} overlap={inputs['overlap']} detrend={inputs['detrend']}.enviro"
+    filename = f"{inputs['start']} - {inputs['end']} {inputs['window']} overlap={inputs['overlap']} detrend={inputs['detrend']}.enviro"
     file = dict(data=data, charts=charts, aggregate=aggregate, inputs=inputs)
     with open(filename, "wb") as handle:
         pickle.dump(file, handle)
     results = pd.DataFrame(data).set_index("index")
     print("++++++++++++ RESULTS ++++++++++++")
-    print(results)
+    # print(results)
     sys.exit()
     for chart in charts:
         if np.count_nonzero(chart["frequencies_kept"]) < 3:

@@ -209,7 +209,7 @@ class PlotlyPriceChart:
 
         return self
 
-    def render(self):
+    def render(self, **kwargs):
         self.figure.update_layout(
             go.Layout(
                 title=dict(text="FLYBABYFLY"),
@@ -220,7 +220,8 @@ class PlotlyPriceChart:
                 #     fixedrange=False,
                 #     domain=[0, 1],
                 # ),
-            )
+            ),
+            **kwargs,
         )
         return self.figure
 

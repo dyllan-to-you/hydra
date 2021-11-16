@@ -15,7 +15,7 @@ from scipy import stats
 import seaborn as sns
 from toolz.itertoolz import frequencies
 
-from hydra.DataLoader import load_prices
+from dataloader import load_prices
 from hydra.utils import printd, timeme
 
 
@@ -45,7 +45,6 @@ def fft_price_analysis(
     startDate,
     endDate=None,
     detrend=False,
-    buckets=False,
     window=None,
     normalize_amplitude=True,
 ):
@@ -61,6 +60,8 @@ def fft_price_analysis(
     figname = f"{pair} {fig_dates}"
     prices = load_prices(pair, startDate=startDate, endDate=endDate)["open"]
     price_len = len(prices)
+    print(f"\n=+=+=+=+=+=+=+=+=+=+= {figname} =+=+=+=+=+=+=+=+=+=+=")
+    print("PRICES", prices)
     # Even numbered price length can result in a 3x speedup!
     if price_len % 2 == 1:
         prices = prices.iloc[:-1]
@@ -69,7 +70,6 @@ def fft_price_analysis(
 
     trim_len = round(price_len * PROPORTION)
     price_trim = prices[trim_len:-trim_len]
-
     slope = 0
     intercept = np.mean(prices)
     if detrend:
@@ -88,7 +88,6 @@ def fft_price_analysis(
     price_index = prices.index
     price_trim_index = price_trim.index
 
-    print(f"\n=+=+=+=+=+=+=+=+=+=+= {figname} =+=+=+=+=+=+=+=+=+=+=")
     print("TREND", trendline, len(trendline), startDate, endDate)
     print(price_detrended)
     valuable_info = transform(price_detrended, time_step)
@@ -717,8 +716,8 @@ def main(start, end, window, overlap, detrend, pair):
 
 if __name__ == "__main__":
     inputs = dict(
-        start="2019-01-01",
-        end="2020-12-01",
+        start="2021-10-09",
+        end="2021-11-13",
         window="1d",
         overlap=0.99,
         detrend=True,

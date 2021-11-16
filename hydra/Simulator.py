@@ -26,7 +26,7 @@ from tqdm import tqdm
 from hydra.models import BuyOrder, Direction, SellOrder
 from hydra.utils import chunk_list, now, printd, timeme
 from hydra.money import calculate_profit, get_decay, get_decay_profit
-from hydra.DataLoader import load_parquet_by_date, ParquetLoader
+from dataloader.kraken import load_parquet_by_date, ParquetLoader
 
 pp = pprint.PrettyPrinter(indent=2)
 project_dir = pathlib.Path(__file__).absolute().parent.parent
@@ -35,7 +35,6 @@ NUM_CORES = psutil.cpu_count(logical=True)
 pair = "XBTUSD"
 startDate = pd.to_datetime("2017-05-01")
 endDate = pd.to_datetime("2020-01-01")
-aroon_reference = "2021-05-20T1919"
 order_folder = "order 2021-06-16T1632 fee=0.001"
 output_dir = project_dir / "output" / pair
 order_dir = output_dir / "orders" / order_folder
@@ -364,7 +363,7 @@ class SimulationActor:
 
 
 @timeme
-def main(pair, startDate, endDate, aroon_reference):
+def main(pair, startDate, endDate):
 
     printd("Setting the stage")
     cores = [
@@ -491,7 +490,7 @@ if __name__ == "__main__":
     try:
         ray.init(include_dashboard=False, local_mode=False)
         # cProfile.run("main()")
-        main(pair, startDate, endDate, aroon_reference)
+        main(pair, startDate, endDate)
     except KeyboardInterrupt:
         print("Interrupted")
     except Exception as e:

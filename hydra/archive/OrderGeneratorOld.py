@@ -2,7 +2,7 @@ import gc
 from timeit import default_timer as timer
 from tqdm.std import tqdm
 from hydra.SimManager import get_simulation_id
-from hydra.DataLoader import load_prices
+from dataloader.kraken import load_prices
 from math import floor
 from hydra.utils import get_mem, now, printd, timeme, write
 import sqlite3

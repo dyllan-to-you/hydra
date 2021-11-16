@@ -5,7 +5,7 @@ import pandas as pd
 from plotly.subplots import make_subplots
 import hydra.utils as utils
 from datetime import datetime, timedelta
-from hydra.DataLoader import load_prices
+from dataloader import load_prices
 
 intervals = [1, 5, 15, 60, 720, 1440]
 
@@ -30,19 +30,20 @@ def supersample_data(
     for i in intervals:
         if i not in res:
             if alwaysUseData:
-                res[i] = data if i in useIntervals else pd.Series()
+                res[i] = data if i in useIntervals else data.truncate(copy=True)
             else:
                 if approximate:
                     res[i] = (
                         data.round(f"{i}min").avg()
                         if i in useIntervals
-                        else pd.Series()
+                        else data.truncate(copy=True)
                     )
                 else:
+                    raise Error("Bad resampling logic")
                     res[i] = (
                         data.resample(f"{i}min").asfreq()
                         if i in useIntervals
-                        else pd.Series()
+                        else data.truncate(copy=True)
                     )
             # print("res", i, f"{interval}T", res[i])
     return res
@@ -215,7 +216,7 @@ class PlotlyPriceChart:
                 title=dict(text="FLYBABYFLY"),
                 barmode="overlay",
                 yaxis2={"fixedrange": False},
-                height=800
+                height=800,
                 # yaxis2=dict(
                 #     fixedrange=False,
                 #     domain=[0, 1],

@@ -7,9 +7,8 @@ import pyarrow.parquet as pq
 price_cache = {}
 
 
-def load_prices(
-    pair, path="../data/kraken", startDate=None, endDate=None, interval=1
-) -> pd.DataFrame:
+def load_prices(pair, startDate=None, endDate=None, interval=1) -> pd.DataFrame:
+    path = "../data/kraken"
     filename = f"{pair}_{interval}"
     prices = price_cache.get(filename, None)
     if prices is None:

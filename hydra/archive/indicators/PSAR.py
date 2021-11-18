@@ -118,7 +118,7 @@ class Indicator(AIndicator):
                 PSARextreme = this_price["High"]
 
         else:
-            raise Error("Invalid PSAR direction: " + self.direction)
+            raise Exception("Invalid PSAR direction: " + self.direction)
 
         return {
             "PSAR": PSAR,

@@ -14,7 +14,11 @@ from . import kraken
 
 
 def load_prices(
-    pair, startDate=None, endDate=None, interval=Client.KLINE_INTERVAL_1MINUTE
+    b_pair,
+    k_pair=None,
+    startDate=None,
+    endDate=None,
+    interval=Client.KLINE_INTERVAL_1MINUTE,
 ):
     k_interval = (
         int(pd.to_timedelta(interval).total_seconds() / 60)
@@ -22,12 +26,16 @@ def load_prices(
         else interval
     )
 
-    b_data = binance_data.load_prices("BTCUSD", startDate, endDate, interval)
-    k_data = kraken.load_prices("XBTUSD", startDate, endDate, k_interval)
+    b_data = binance_data.load_prices(b_pair, startDate, endDate, interval)
+
+    if k_pair is None:
+        return b_data
+
+    k_data = kraken.load_prices(k_pair, startDate, endDate, k_interval)
 
     if len(b_data) == 0:
         b_data = binance_data.load_prices(
-            "BTCUSD", startDate, endDate, interval, log=True
+            b_pair, startDate, endDate, interval, log=True
         )
     prices = b_data.combine_first(k_data)
     if len(prices) == 0:

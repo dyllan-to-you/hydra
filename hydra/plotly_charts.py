@@ -26,6 +26,7 @@ def matplotlib_to_plotly(cmap_name, pl_entries):
 def supersample_data(
     data, interval, useIntervals=[], alwaysUseData=False, approximate=False
 ):
+    data = data.sort_index()
     res = {interval: data}
     for i in intervals:
         if i not in res:
@@ -39,7 +40,7 @@ def supersample_data(
                         else data.truncate(copy=True)
                     )
                 else:
-                    raise Error("Bad resampling logic")
+                    raise Exception("Bad resampling logic")
                     res[i] = (
                         data.resample(f"{i}min").asfreq()
                         if i in useIntervals
@@ -52,16 +53,16 @@ def supersample_data(
 def data_resample_factory(data: "dict[int, pd.DataFrame]", onlySlice=False):
     def resample_data(start_date, end_date, interval):
         window_size = end_date - start_date
-        fakestart = start_date - window_size
-        fakeend = end_date + window_size
+        # fakestart = start_date - window_size
+        # fakeend = end_date + window_size
         interval_data = data[interval]
-        precise_data = interval_data.loc[fakestart:fakeend]
+        precise_data = interval_data.loc[start_date:end_date]
         if onlySlice:
             return precise_data
         else:
             big_data = data[intervals[-1]]
             the_data = pd.concat(
-                [big_data.loc[:fakestart], big_data.loc[fakeend:], precise_data]
+                [big_data.loc[:start_date], big_data.loc[end_date:], precise_data]
             ).sort_index()
 
         return the_data
@@ -127,10 +128,12 @@ class PlotlyPriceChart:
         self.data_idx = 0
         self.handle_list = []
         self.handler = self.handler_factory()
+        self.slider_handler = self.slider_handler_factory()
         self.figure: go.FigureWidget = None
         self.startDate = startDate
         self.endDate = endDate
         self.generate_figure(pair)
+        self.xrange = [startDate, endDate]
 
     def slicer(self, start, end):
         size = 250
@@ -151,6 +154,15 @@ class PlotlyPriceChart:
         with self.figure.batch_update():
             for resample, trace_idx, fields in self.handle_list:
                 the_data = resample(start_date, end_date, interval)
+                if self.figure.layout.title.text is not None:
+                    slider_input = int(self.figure.layout.title.text[0:2])
+                    if slider_input > 0:
+                        sliderEnd = start_date + (delta * slider_input / 100)
+                        if trace_idx > 0:
+                            the_data = the_data.loc[the_data["endDate"] <= sliderEnd]
+                        else:
+                            the_data = the_data.loc[the_data.index <= sliderEnd]
+
                 trace = self.figure.data[trace_idx]
                 for key, val in fields.items():
                     try:
@@ -183,6 +195,14 @@ class PlotlyPriceChart:
     def handler_factory(self):
         def handler(obj, xrange):
             [start, end] = xrange.range
+            self.xrange = [start, end]
+            self.slicer(start, end)
+
+        return handler
+
+    def slider_handler_factory(self):
+        def handler(obj, title):
+            [start, end] = self.xrange
             self.slicer(start, end)
 
         return handler
@@ -191,6 +211,7 @@ class PlotlyPriceChart:
         self.handle_list.append(data)
         self.slicer(self.startDate, self.endDate)
         self.figure.layout.on_change(self.handler, "xaxis")
+        self.figure.layout.on_change(self.slider_handler, "title")
 
     def generate_figure(self, pair):
         self.figure = go.FigureWidget(make_subplots(rows=2, cols=1, shared_xaxes=True))
@@ -213,7 +234,7 @@ class PlotlyPriceChart:
     def render(self, **kwargs):
         self.figure.update_layout(
             go.Layout(
-                title=dict(text="FLYBABYFLY"),
+                title=f"01% from start (0 = show all)",
                 barmode="overlay",
                 yaxis2={"fixedrange": False},
                 height=800,

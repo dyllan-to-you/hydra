@@ -139,7 +139,7 @@ def load_prices(
 
 @timeme
 def download(
-    client,
+    client: Client,
     pair,
     start="10 years ago UTC",
     end=None,
@@ -219,8 +219,11 @@ def update_data(
     print(datadir)
     files = list(datadir.glob(f"**/*.parq"))
     if len(files) == 0:
-        kraken_prices = kraken.load_prices(pair_kraken)
-        start = kraken_prices.index[-1]
+        if pair_kraken is not None:
+            kraken_prices = kraken.load_prices(pair_kraken)
+            start = kraken_prices.index[-1]
+        else:
+            start = "10 years ago UTC"
         data = set_partition_keys(download(client, pair_binance, str(start)))
         data.to_parquet(
             datadir,
@@ -232,7 +235,7 @@ def update_data(
         lastFile = sorted(files, key=lambda x: pd.to_datetime(x.stem))[-1]
         print(lastFile.name)
         lastData = pd.read_parquet(lastFile)
-        print(str(lastData.index[-1]))
+        print("LAST", lastData, str(lastData.index[-1]))
         data = download(client, pair_binance, start=str(lastData.index[-1]))
         # Note: to_parquet will overwrite the files for relevant partitions, thus the concat
         data = set_partition_keys(pd.concat([lastData, data]))
@@ -247,5 +250,5 @@ def update_data(
 
 
 if __name__ == "__main__":
-    update_data(pair_binance="BTCUSD", pair_kraken="XBTUSD")
+    update_data(pair_binance="DOGEUSD", pair_kraken=None)
     # load_prices("BTCUSD")

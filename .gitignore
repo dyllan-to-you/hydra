@@ -150,3 +150,5 @@ csv/
 output/*
 *.json
 *.ini
+profile.html
+notebooks/log.txt

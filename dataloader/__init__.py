@@ -5,14 +5,6 @@ from . import binance_data
 from . import kraken
 
 
-# pairmap = {
-#     "XBTUSD": {
-#         "kraken": "XBTUSD",
-#         "binance": "BTCUSD"
-#     }
-# }
-
-
 def load_prices(
     b_pair,
     k_pair=None,

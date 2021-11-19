@@ -1,5 +1,6 @@
 # matplotlib.use("TkAgg")
 import os
+import pathlib
 from pprint import pprint
 import sys
 import traceback
@@ -50,7 +51,7 @@ def fft_price_analysis(
     pair,
     startDate,
     endDate=None,
-    detrend=False,
+    detrend=True,
     window=None,
     normalize_amplitude=True,
 ):
@@ -69,6 +70,8 @@ def fft_price_analysis(
     # print("PRICES", prices)
 
     if len(prices) == 0 or endDate != prices.index[-1]:
+        print("ERROR", len(prices), endDate, prices.index[-1])
+
         return None
 
     trim_len = round(price_len * PROPORTION)
@@ -700,68 +703,92 @@ def parallel_handler(tasks):
         return [fft_price_analysis(*task["args"], **task["kwargs"]) for task in tasks]
 
 
-def gen_tasks(start, end, window, overlap=None, detrend=True, pair=""):
+def gen_tasks(
+    start, window, pair, midnightLock=False, end=None, overlap=None, detrend=True
+):
     start = pd.to_datetime(start)
     end = pd.to_datetime(end)
-
-    if end is not None:
-        # Todo: see if end is time delta or datetime, use to generate count
-        pass
 
     prices = load_prices(pair, startDate=start, endDate=end)["open"]
     start = prices.index[0]
     end = prices.index[-1]
 
-    window_increment = window
-    if overlap is not None:
-        window_increment *= 1 - overlap
-        window_increment = window_increment.round("1min")
+    if midnightLock:
+        window_increment = pd.DateOffset(days=1)
+    else:
+        window_increment = window
+        if overlap is not None:
+            window_increment *= 1 - overlap
+            window_increment = window_increment.round("1min")
 
     for startDate in pd.date_range(start=start, end=end, freq=window_increment):
+        if startDate + window_increment > end:
+            break
+        if midnightLock:
+            startDate = startDate.floor("D")
         yield {
             "args": (pair, startDate),
             "kwargs": {"detrend": detrend, "window": window},
         }
 
 
-def main(start, end, window, overlap, detrend, pair):
+def main(
+    start,
+    window,
+    detrend,
+    pair,
+    overlap=None,
+    end=None,
+    midnightLock=False,
+    savePath: pathlib.Path = None,
+):
 
-    window = pd.to_timedelta(window)
+    window_delta = pd.to_timedelta(window)
     # Even numbered price length can result in a 3x speedup!
-    if window % 2 == 0:
-        window = window - pd.to_timedelta(1, unit="m")
+    if window_delta % pd.to_timedelta("2min") == 0:
+        window_delta = window_delta - pd.to_timedelta(1, unit="min")
 
     tasks = list(
         gen_tasks(
-            start, end, window=window, overlap=overlap, detrend=detrend, pair=pair
+            start,
+            end=end,
+            window=window_delta,
+            overlap=overlap,
+            detrend=detrend,
+            pair=pair,
+            midnightLock=midnightLock,
         )
     )
-
     results = parallel_handler(tasks)
     if results is None:
         try:
             sys.exit(0)
         except SystemExit:
             os._exit(0)
-
     results = [result for result in results if result is not None]
 
     data, charts = zip(*results)
     # print("Tasks:", pd.DataFrame(tasks))
     # print("Results:", len(results))
+
+    if savePath is not None:
+        output_dir = savePath / window
+        print(data)
+        return data, charts
+
     aggregates = process_aggregate(data, charts)
     return data, charts, aggregates
 
 
 if __name__ == "__main__":
     inputs = dict(
-        start="2021-01-01",
-        # start="2021-11-01",
-        end="2021-11-19",
+        # start="2021-01-01",
+        start="2021-11-01",
+        end="2021-11-10",
         window="1d",
-        overlap=0.99,
+        overlap=None,  # 0.99,
         detrend=True,
-        pair="DOGEUSD",
+        pair="BTCUSD",
     )
     data, charts, aggregate = main(**inputs)
     filename = f"{inputs['pair']} {inputs['start']} - {inputs['end']} {inputs['window']} overlap={inputs['overlap']} detrend={inputs['detrend']}.enviro"

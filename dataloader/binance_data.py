@@ -5,7 +5,7 @@ from configparser import ConfigParser
 import pandas as pd
 import numpy as np
 from binance import Client
-from dataloader import kraken
+from dataloader import pairs, kraken
 from hydra.utils import timeme
 
 FILEPATH = pathlib.Path(__file__).parent.absolute()
@@ -119,7 +119,7 @@ def load_prices(
                 ]
             ],
         )
-        prices = prices.loc[start:]
+        prices = prices.loc[(prices.index >= start)]
     else:
         prices = pd.read_parquet(
             datadir,
@@ -201,9 +201,9 @@ def partition_filename_cb(keys):
 
 
 @timeme
-def update_data(
-    pair_binance="BTCUSD", pair_kraken="XBTUSD", interval=Client.KLINE_INTERVAL_1MINUTE
-):
+def update_data(pair_binance="BTCUSD", interval=Client.KLINE_INTERVAL_1MINUTE):
+    pair_kraken = pairs.binance_to_kraken(pair_binance)
+
     config = ConfigParser()
 
     config.read(FILEPATH.joinpath("../configs/dyllan.ini"))
@@ -250,5 +250,6 @@ def update_data(
 
 
 if __name__ == "__main__":
-    update_data(pair_binance="DOGEUSD", pair_kraken=None)
+    # update_data(pair_binance="DOGEUSD", pair_kraken=None)
+    update_data(pair_binance="BTCUSD", pair_kraken="XBTUSD")
     # load_prices("BTCUSD")

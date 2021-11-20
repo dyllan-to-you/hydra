@@ -7,6 +7,7 @@ import traceback
 import pickle
 import wave
 
+from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -66,18 +67,22 @@ def fft_price_analysis(
     figname = f"{pair} {fig_dates}"
     prices = load_prices(pair, startDate=startDate, endDate=endDate)["open"]
     price_len = len(prices)
-    print(f"\n=+=+=+=+=+=+=+=+=+=+= {figname} =+=+=+=+=+=+=+=+=+=+=")
+    # printd(f"\n=+=+=+=+=+=+=+=+=+=+= START {figname} =+=+=+=+=+=+=+=+=+=+=")
     # print("PRICES", prices)
 
     if len(prices) == 0 or endDate != prices.index[-1]:
-        print("ERROR", len(prices), endDate, prices.index[-1])
+        print("ERROR", len(prices), window, startDate, endDate)
+        print(prices.index[0], prices.index[-1])
 
-        return None
+        raise Exception("Help oh god please no")
 
     trim_len = round(price_len * PROPORTION)
-    price_trim = prices[trim_len:-trim_len]
+    price_trim = prices[trim_len:-trim_len]  # why is this here
     slope = 0
     intercept = np.mean(prices)
+    tf = [price for price in prices if not price >= 0]
+    assert len(tf) == 0
+
     if detrend:
         figname = "(D)" + figname
         slope, intercept, *_ = stats.linregress(
@@ -86,16 +91,12 @@ def fft_price_analysis(
         )
     line_gen = date_line_gen_factory(slope, intercept, startDate)
     trendline = line_gen(startDate, endDate)
-
     price_detrended = prices - trendline
     price_detrended_trim = price_detrended[trim_len:-trim_len]
     trendline_trim = trendline[trim_len:-trim_len]
 
-    price_index = prices.index
-    price_trim_index = price_trim.index
-
     # print("TREND", trendline, len(trendline), startDate, endDate)
-    # print(price_detrended)
+    print(price_len, len(prices), slope, intercept, trendline, price_detrended)
     valuable_info = transform(price_detrended, time_step)
     fft, freqs, index, powers = valuable_info
     # print(f"{len(fft)=} {fft=}")
@@ -118,6 +119,9 @@ def fft_price_analysis(
         print(
             "constructed is none?",
             figname,
+            df.size,
+            fft.size,
+            len(freqs),
         )
         return None
 
@@ -300,14 +304,8 @@ def construct_price_significant_frequencies(
         np.zeros(len(price_detrended)),
         index=price_detrended.index,
     )
-    # print("price", price_detrended)
-    deviances = [
-        # deviance_calc(
-        #     price_detrended_add[trim_len:-trim_len],
-        #     trendline[trim_len:-trim_len],
-        #     price_detrended[trim_len:-trim_len],
-        # )
-    ]
+    print("price", price_detrended)
+    deviances = []
     count = 0
     subset_removed = [1]
 
@@ -683,7 +681,7 @@ def parallel_handler(tasks):
             # cProfile.run("main()")
 
             result_refs = []
-            for idx, task in enumerate(tasks):
+            for idx, task in enumerate(tqdm(tasks)):
                 if len(result_refs) > RATE_LIMIT:
                     ray.wait(result_refs, num_returns=idx - RATE_LIMIT)
                 result_refs.append(
@@ -708,7 +706,6 @@ def gen_tasks(
 ):
     start = pd.to_datetime(start)
     end = pd.to_datetime(end)
-
     prices = load_prices(pair, startDate=start, endDate=end)["open"]
     start = prices.index[0]
     end = prices.index[-1]
@@ -722,10 +719,11 @@ def gen_tasks(
             window_increment = window_increment.round("1min")
 
     for startDate in pd.date_range(start=start, end=end, freq=window_increment):
-        if startDate + window_increment > end:
+        if startDate + window > end:
             break
         if midnightLock:
-            startDate = startDate.floor("D")
+            assert (startDate + window).minute == 0
+            # startDate = startDate.floor("D")
         yield {
             "args": (pair, startDate),
             "kwargs": {"detrend": detrend, "window": window},
@@ -742,11 +740,12 @@ def main(
     midnightLock=False,
     savePath: pathlib.Path = None,
 ):
-
+    start = pd.to_datetime(start)
     window_delta = pd.to_timedelta(window)
     # Even numbered price length can result in a 3x speedup!
-    if window_delta % pd.to_timedelta("2min") == 0:
+    if (window_delta % pd.to_timedelta("2min")).total_seconds() == 0:
         window_delta = window_delta - pd.to_timedelta(1, unit="min")
+        start += pd.to_timedelta("1min")
 
     tasks = list(
         gen_tasks(
@@ -766,7 +765,6 @@ def main(
         except SystemExit:
             os._exit(0)
     results = [result for result in results if result is not None]
-
     data, charts = zip(*results)
     # print("Tasks:", pd.DataFrame(tasks))
     # print("Results:", len(results))
@@ -783,9 +781,9 @@ def main(
 if __name__ == "__main__":
     inputs = dict(
         # start="2021-01-01",
-        start="2021-11-01",
+        start="2021-01-01",
         end="2021-11-10",
-        window="1d",
+        window="14d",
         overlap=None,  # 0.99,
         detrend=True,
         pair="BTCUSD",

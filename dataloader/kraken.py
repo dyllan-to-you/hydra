@@ -23,6 +23,8 @@ def load_prices(pair, startDate=None, endDate=None, interval=1) -> pd.DataFrame:
         prices = prices.set_index("time")
     if startDate is not None and endDate is not None:
         prices = prices.loc[startDate:endDate]
+    elif startDate is not None:
+        prices = prices.loc[startDate:]
         prices = prices.iloc[:-1]
     return prices.drop("trades", axis=1)
 

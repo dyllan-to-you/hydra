@@ -34,6 +34,8 @@ def supersample_data(
                 res[i] = data if i in useIntervals else data.truncate(copy=True)
             else:
                 if approximate:
+                    print("data", data)  # , data.round(f"{i}min").avg())
+                    print(data.dtypes)
                     res[i] = (
                         data.round(f"{i}min").avg()
                         if i in useIntervals
@@ -124,7 +126,7 @@ TODO: extrapolate fft aggregate (just render min/max prediction)
 
 
 class PlotlyPriceChart:
-    def __init__(self, pair, startDate, endDate):
+    def __init__(self, pair, startDate, endDate, loc):
         self.data_idx = 0
         self.handle_list = []
         self.handler = self.handler_factory()
@@ -132,7 +134,7 @@ class PlotlyPriceChart:
         self.figure: go.FigureWidget = None
         self.startDate = startDate
         self.endDate = endDate
-        self.generate_figure(pair)
+        self.generate_figure(pair, loc=loc)
         self.xrange = [startDate, endDate]
 
     def slicer(self, start, end):
@@ -213,8 +215,11 @@ class PlotlyPriceChart:
         self.figure.layout.on_change(self.handler, "xaxis")
         self.figure.layout.on_change(self.slider_handler, "title")
 
-    def generate_figure(self, pair):
-        self.figure = go.FigureWidget(make_subplots(rows=2, cols=1, shared_xaxes=True))
+    def generate_figure(self, pair, loc):
+        rows, cols = loc
+        self.figure = go.FigureWidget(
+            make_subplots(rows=rows, cols=cols, shared_xaxes=True)
+        )
 
         candlestick, prices = get_price_trace(pair, self.startDate, self.endDate)
         self.add_trace(
@@ -227,17 +232,20 @@ class PlotlyPriceChart:
                 "low": "low",
                 "close": "close",
             },
+            loc=loc,
         )
 
         return self
 
-    def render(self, **kwargs):
+    def render(self, zoomStart, zoomEnd, **kwargs):
         self.figure.update_layout(
             go.Layout(
-                title=f"01% from start (0 = show all)",
+                title=f"50% from start (0 = show all)",
                 barmode="overlay",
+                yaxis={"fixedrange": False},
                 yaxis2={"fixedrange": False},
                 height=800,
+                xaxis=dict(range=[zoomStart, zoomEnd])
                 # yaxis2=dict(
                 #     fixedrange=False,
                 #     domain=[0, 1],

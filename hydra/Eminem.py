@@ -29,11 +29,16 @@ def main(pair_binance="BTCUSD", overlap=0.99, forceNewFile=True, config="config"
             file = pickle.load(handle)
             lastRun = file["lastRun"]
             startDate = (lastRun - pd.to_timedelta("365d")).floor("D")
+            print("hello")
     except FileNotFoundError:
-        prices = load_prices(b_pair="BTCUSD", k_pair=("XBTUSD"))
+        prices = load_prices("BTCUSD")
         startDate = (prices.index[0] + pd.to_timedelta("1439min")).floor("D")
-        # lastRun = startDate + pd.to_timedelta("365d")
-
+        print(
+            "prices",
+            prices.index[0] + pd.to_timedelta("1439min"),
+            (prices.index[0] + pd.to_timedelta("1439min")).floor("D"),
+        )
+    # lastRun = startDate + pd.to_timedelta("365d")
     results = bulk_analysis(
         startDate, window="365d", detrend=True, pair=pair_binance, midnightLock=True
     )

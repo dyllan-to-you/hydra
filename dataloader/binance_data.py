@@ -7,6 +7,7 @@ import numpy as np
 from binance import Client
 from dataloader import pairs, kraken
 from hydra.utils import timeme
+from utils.gapfiller import fillGaps
 
 FILEPATH = pathlib.Path(__file__).parent.absolute()
 
@@ -15,12 +16,13 @@ def load_prices(
     pair,
     startDate=None,
     endDate=None,
-    interval=Client.KLINE_INTERVAL_1MINUTE,
+    interval=1,
     log=False,
 ):
-    datadir = FILEPATH.joinpath("../data/binance.us", f"{pair}_1m")
+    b_interval = f"{interval}m"
+    datadir = FILEPATH.joinpath("../data/binance.us", f"{pair}_{b_interval}")
     if log:
-        print(pair, startDate, endDate, interval)
+        print(pair, startDate, endDate, b_interval)
     if startDate is not None and endDate is not None:
         start: datetime = pd.to_datetime(startDate)
         startYear = start.year
@@ -126,9 +128,7 @@ def load_prices(
         )
     prices = prices.drop(["year", "month", "day"], axis=1, errors="ignore")
 
-    _interval = (
-        interval.replace("m", "T") if isinstance(interval, str) else f"{interval}T"
-    )
+    _interval = f"{interval}T"
     prices = prices.groupby(pd.Grouper(freq=_interval)).agg(
         {"open": "first", "close": "last", "high": "max", "low": "min", "volume": "sum"}
     )
@@ -141,14 +141,16 @@ def load_prices(
 def download(
     client: Client,
     pair,
-    start="10 years ago UTC",
+    start="January 1, 2000 UTC",
     end=None,
-    interval=Client.KLINE_INTERVAL_1MINUTE,
+    interval=1,
 ):
+    b_interval = f"{interval}m"
+
     if end is not None:
-        klines = client.get_historical_klines_generator(pair, interval, start, end)
+        klines = client.get_historical_klines_generator(pair, b_interval, start, end)
     else:
-        klines = client.get_historical_klines_generator(pair, interval, start)
+        klines = client.get_historical_klines_generator(pair, b_interval, start)
     klines_df = pd.DataFrame(
         klines,
         columns=[
@@ -197,11 +199,12 @@ def set_partition_keys(df):
 
 def partition_filename_cb(keys):
     year, month, day = keys
-    return f"{year}-{month}-{day}.parq"
+    return f"{int(year)}-{int(month)}-{int(day)}.parq"
 
 
 @timeme
-def update_data(pair_binance="BTCUSD", interval=Client.KLINE_INTERVAL_1MINUTE):
+def update_data(pair_binance="BTCUSD", interval=1):
+    b_interval = f"{interval}m"
     pair_kraken = pairs.binance_to_kraken(pair_binance)
 
     config = ConfigParser()
@@ -214,17 +217,28 @@ def update_data(pair_binance="BTCUSD", interval=Client.KLINE_INTERVAL_1MINUTE):
         tld="us",
     )
 
-    datadir = FILEPATH.joinpath("../data/binance.us", f"{pair_binance}_{interval}")
+    datadir = FILEPATH.joinpath("../data/binance.us", f"{pair_binance}_{b_interval}")
     datadir.mkdir(parents=True, exist_ok=True)
     print(datadir)
     files = list(datadir.glob(f"**/*.parq"))
     if len(files) == 0:
         if pair_kraken is not None:
             kraken_prices = kraken.load_prices(pair_kraken)
-            start = kraken_prices.index[-1]
+            lastDT = kraken_prices.index[-1]
+            target_start = lastDT + pd.to_timedelta(f"{interval}min")
+            lastClose = kraken_prices["close"][-1]
+            print(f"{lastClose=}, {lastDT=}, {target_start=}")
         else:
-            start = "10 years ago UTC"
-        data = set_partition_keys(download(client, pair_binance, str(start)))
+            lastDT = "January 1, 2000 UTC"
+            target_start = None
+            lastClose = None
+        data = set_partition_keys(download(client, pair_binance, str(target_start)))
+        data = fillGaps(
+            interval,
+            data,
+            last_close=lastClose,
+            start_time=target_start,
+        )
         data.to_parquet(
             datadir,
             index=True,
@@ -235,11 +249,20 @@ def update_data(pair_binance="BTCUSD", interval=Client.KLINE_INTERVAL_1MINUTE):
         lastFile = sorted(files, key=lambda x: pd.to_datetime(x.stem))[-1]
         print(lastFile.name)
         lastData = pd.read_parquet(lastFile)
-        print("LAST", lastData, str(lastData.index[-1]))
-        data = download(client, pair_binance, start=str(lastData.index[-1]))
+        lastClose = lastData["close"][-1]
+        lastDT = pd.to_datetime(lastData.index[-1])
+
+        target_start = lastDT + pd.to_timedelta(f"{interval}min")
+        data = download(client, pair_binance, start=str(target_start))
+        data = fillGaps(
+            interval,
+            data,
+            last_close=lastClose,
+            start_time=target_start,
+        )
         # Note: to_parquet will overwrite the files for relevant partitions, thus the concat
         data = set_partition_keys(pd.concat([lastData, data]))
-        print(data)
+
         data.to_parquet(
             datadir,
             index=True,
@@ -251,5 +274,5 @@ def update_data(pair_binance="BTCUSD", interval=Client.KLINE_INTERVAL_1MINUTE):
 
 if __name__ == "__main__":
     # update_data(pair_binance="DOGEUSD", pair_kraken=None)
-    update_data(pair_binance="BTCUSD", pair_kraken="XBTUSD")
+    update_data(pair_binance="BTCUSD")
     # load_prices("BTCUSD")

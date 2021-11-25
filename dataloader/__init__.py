@@ -11,29 +11,23 @@ def load_prices(
     b_pair,
     startDate=None,
     endDate=None,
-    interval=Client.KLINE_INTERVAL_1MINUTE,
+    interval=1,
 ):
     k_pair = binance_to_kraken(b_pair)
-    k_interval = (
-        int(pd.to_timedelta(interval).total_seconds() / 60)
-        if isinstance(interval, str)
-        else interval
-    )
-    assert (
-        k_interval <= 1440
-    ), "This is to make sure that 1m isn't interpreted as a month"
 
     b_data = binance_data.load_prices(b_pair, startDate, endDate, interval)
 
     if k_pair is None:
         return b_data
 
-    k_data = kraken.load_prices(k_pair, startDate, endDate, k_interval)
+    k_data = kraken.load_prices(k_pair, startDate, endDate, interval)
 
     # if len(b_data) == 0:
     #     b_data = binance_data.load_prices(
     #         b_pair, startDate, endDate, interval, log=True
     #     )
+    # print("----kraken----", k_data)
+    # print("++++binance+++", b_data)
     prices = b_data.combine_first(k_data)
     if len(prices) == 0:
         print(startDate, endDate)

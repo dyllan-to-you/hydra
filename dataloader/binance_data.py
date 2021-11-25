@@ -7,7 +7,7 @@ import numpy as np
 from binance import Client
 from dataloader import pairs, kraken
 from hydra.utils import timeme
-from utils.gapfiller import fillGaps
+from utilsPkg.gapfiller import fillGaps
 
 FILEPATH = pathlib.Path(__file__).parent.absolute()
 
@@ -21,7 +21,9 @@ def load_prices(
 ):
     b_interval = f"{interval}m"
     datadir = FILEPATH.joinpath("../data/binance.us", f"{pair}_{b_interval}")
+
     if log:
+        print("LOAD LOG", datadir)
         print(pair, startDate, endDate, b_interval)
     if startDate is not None and endDate is not None:
         start: datetime = pd.to_datetime(startDate)
@@ -34,15 +36,6 @@ def load_prices(
         endDay = end.day
         if log:
             print(startYear, startMonth, startDay, endYear, endMonth, endDay)
-
-        [
-            ("year", ">=", startYear),
-            ("month", ">=", startMonth),
-            ("day", ">=", startDay),
-            ("year", "<=", endYear),
-            ("month", "<=", endMonth),
-            ("day", "<=", endDay),
-        ]
 
         if startYear == endYear:
             if startMonth == endMonth:
@@ -107,20 +100,27 @@ def load_prices(
         if log:
             print("prices b", prices)
     elif startDate is not None:
+        Exception("No endtime is not supported yet")
         start: datetime = pd.to_datetime(startDate)
         startYear = start.year
         startMonth = start.month
         startDay = start.day
-        prices = pd.read_parquet(
-            datadir,
-            filters=[
-                [
-                    ("year", ">=", startYear),
-                    ("month", ">=", startMonth),
-                    ("day", ">=", startDay),
-                ]
+        filters = [
+            [
+                ("year", "==", startYear),
+                ("month", "==", startMonth),
+                ("day", ">=", startDay),
             ],
-        )
+            [
+                ("year", "==", startYear),
+                ("month", ">", startMonth),
+            ],
+            [
+                ("year", ">", startYear),
+            ],
+        ]
+
+        prices = pd.read_parquet(datadir, filters=filters)
         prices = prices.loc[(prices.index >= start)]
     else:
         prices = pd.read_parquet(
@@ -141,7 +141,7 @@ def load_prices(
 def download(
     client: Client,
     pair,
-    start="January 1, 2000 UTC",
+    start="2000/01/01",
     end=None,
     interval=1,
 ):
@@ -191,9 +191,9 @@ def download(
 
 
 def set_partition_keys(df):
-    df["year"] = df.index.year
-    df["month"] = df.index.month
-    df["day"] = df.index.day
+    df["year"] = df.index.year.astype(int)
+    df["month"] = df.index.month.astype(int)
+    df["day"] = df.index.day.astype(int)
     return df
 
 
@@ -229,16 +229,16 @@ def update_data(pair_binance="BTCUSD", interval=1):
             lastClose = kraken_prices["close"][-1]
             print(f"{lastClose=}, {lastDT=}, {target_start=}")
         else:
-            lastDT = "January 1, 2000 UTC"
-            target_start = None
+            target_start = "2000/01/01"
             lastClose = None
-        data = set_partition_keys(download(client, pair_binance, str(target_start)))
+        data = download(client, pair_binance, str(target_start))
         data = fillGaps(
             interval,
             data,
             last_close=lastClose,
             start_time=target_start,
         )
+        data = set_partition_keys(data)
         data.to_parquet(
             datadir,
             index=True,

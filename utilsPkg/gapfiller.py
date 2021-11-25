@@ -38,6 +38,9 @@ def fillGaps(interval, prices: pd.DataFrame, last_close=None, start_time=None):
 
     if start_time is None:
         start_time = prices.index[0]
+    if len(prices) == 0:
+        return prices
+    print("fillgaps prices", prices, start_time, prices.index)
     new_index = pd.date_range(start_time, prices.index[-1], freq=f"{interval}Min")
     prices = prices.reindex(new_index, fill_value=None)
 

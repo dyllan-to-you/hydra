@@ -1,5 +1,5 @@
 Scalene w/html outputs
 
 ```sh
-poetry run scalene --html --outfile profile.html <filename>
+poetry run scalene --html --outfile scalene.html <filename>
 ```

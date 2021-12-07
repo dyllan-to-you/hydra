@@ -24,7 +24,7 @@ from sqlalchemy.orm.instrumentation import instance_state
 from tqdm import tqdm
 
 from hydra.models import BuyOrder, Direction, SellOrder
-from hydra.utils import chunk_list, now, printd, timeme
+from hydra.utils import striped_chunk_list, now, printd, timeme
 from hydra.money import calculate_profit, get_decay, get_decay_profit
 from dataloader.kraken import load_parquet_by_date, ParquetLoader
 
@@ -374,7 +374,7 @@ def main(pair, startDate, endDate):
         if f.is_dir() and f.name.startswith("core")
     ]
 
-    core_chunks = chunk_list(cores, NUM_CORES)
+    core_chunks = striped_chunk_list(cores, NUM_CORES)
     actors = {}
     for chunk in core_chunks:
         actor = SimulationActor.remote(chunk)

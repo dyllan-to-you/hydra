@@ -30,10 +30,16 @@ def now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def chunk_list(l: List, n: int):
+def striped_chunk_list(l: List, n: int):
     """Yield n number of striped chunks from l."""
     for i in range(0, n):
         yield l[i::n]
+
+
+def chunk_list(l: List, n: int):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(l), n):
+        yield l[i : i + n]
 
 
 def get_mem(unit=None):

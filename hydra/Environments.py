@@ -28,6 +28,8 @@ pd.set_option("display.width", 0)
 sns.set_theme()
 
 LOG_RAY = False
+NUM_CORES = 60
+
 
 PROPORTION = 0.025
 PRICE_DEVIANCE_CUTOFF = 0.01
@@ -795,20 +797,21 @@ def render_agg_chart(frequencies_kept_df):
     axs.tick_params(axis="x", labelrotation=-90)
 
 
-RATE_LIMIT = 32
-
-
 @timeme
-def run_parallel(tasks):
+def run_parallel(tasks, keep_ray_running=False):
     if sys.argv[-1] == "ray":
+        errorThrown = False
         try:
-            ray.init(include_dashboard=True, local_mode=False, log_to_driver=LOG_RAY)
+            if not ray.is_initialized():
+                ray.init(
+                    include_dashboard=True, local_mode=False, log_to_driver=LOG_RAY
+                )
             # cProfile.run("main()")
 
             result_refs = []
-            for idx, task in enumerate(tqdm(tasks)):
-                if len(result_refs) > RATE_LIMIT:
-                    ray.wait(result_refs, num_returns=idx - RATE_LIMIT)
+            for idx, task in enumerate(tasks):
+                if len(result_refs) > NUM_CORES:
+                    ray.wait(result_refs, num_returns=idx - NUM_CORES)
                 if isinstance(task, tuple):
                     result_refs.append(fft_price_analysis_ray.remote(*task))
                 else:
@@ -816,16 +819,19 @@ def run_parallel(tasks):
                         fft_price_analysis_ray.remote(*task["args"], **task["kwargs"])
                     )
             return ray.get(result_refs)
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as e:
+            errorThrown = True
             printd("Interrupted")
-            return None
+            raise e
         except (RayTaskError, Exception) as e:
+            errorThrown = True
             traceback.print_tb(e.__traceback__)
             printd(f"{e}")
             raise e
             # return None
         finally:
-            ray.shutdown()
+            if errorThrown or (not keep_ray_running and ray.is_initialized()):
+                ray.shutdown()
     else:
         return [
             fft_price_analysis(*task)

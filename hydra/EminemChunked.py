@@ -6,6 +6,9 @@ import numpy as np
 from numpy.core.numeric import cross
 import pandas as pd
 from pandas._testing import assert_frame_equal
+from tqdm import tqdm
+import ray
+
 
 import pyarrow
 from dataloader import load_prices
@@ -14,16 +17,23 @@ from dataloader.binance_data import update_data
 from hydra.Environments import gen_tasks
 from hydra.Environments import main as bulk_analysis
 from hydra.Environments import run_parallel
-from hydra.utils import timeme
+from hydra.utils import chunk_list, timeme
 
 ROOT_WINDOW = 90 * 1440
 ROOT_WINDOW = 7 * 1440
-
+CHUNK_SIZE = 60
 OVERLAP = 0.95
 SKIP_SAVE = False
 ABORT_ON_DUPLICATE = False
 
 RUN_SAVE_TEST = False
+
+"""
+Check memory consumption before run
+First run uses minimum chunk size
+after run, get current memory
+    use to derive max chunk size (with buffer)
+"""
 
 
 @timeme
@@ -43,6 +53,7 @@ def main(
     config_file = output_dir / config
 
     if startDate is None:
+        # Determine startDate from existing prices
         prices = load_prices("BTCUSD")
         startDate = (prices.index[0] + pd.to_timedelta("1439min")).floor("D")
     else:
@@ -206,17 +217,28 @@ def main(
         #     ]
         # )
 
-        print(f"Executing {len(tasks)} Tasks")
-        results = [result for result in run_parallel(tasks) if result is not None]
-        data, charts = zip(*results)
-        child_runs = save_results(data, charts, output_dir=output_dir)
-        accumulated_parent_data["saved"] = True
+        task_chunks = list(chunk_list(tasks, CHUNK_SIZE))
+        print(f"Executing {len(tasks)} Tasks as {len(task_chunks)} Chunks")
 
+        child_runs = []
+        for chunk in tqdm(task_chunks):
+            results = [
+                result
+                for result in run_parallel(chunk, keep_ray_running=True)
+                if result is not None
+            ]
+            data, charts = zip(*results)
+            child_runs.append(save_results(data, charts, output_dir=output_dir))
+
+        child_runs = pd.concat(child_runs)
         child_runs = preprocess_child_runs(
             overlap, rootWindow, runEndDatetime, child_runs
         )
+        accumulated_parent_data["saved"] = True
         accumulated_parent_data = accumulated_parent_data.append(child_runs)
 
+    if ray.is_initialized():
+        ray.shutdown()
     print("All layers run")
     accumulated_parent_data["saved"] = True
     save_accumulated_parents(output_dir, accumulated_parent_data)
@@ -226,23 +248,46 @@ def main(
 
 @timeme
 def process_root_layer(
-    startDate, runEndDatetime, pair_binance, overlap, rootWindow, output_dir
+    startDate,
+    endDate,
+    pair_binance,
+    overlap,
+    rootWindow,
+    output_dir,
+    chunkSize=pd.to_timedelta(CHUNK_SIZE, "days"),
 ):
-    result_data, result_charts, result_aggregates = bulk_analysis(
-        startDate,
-        end=runEndDatetime,
-        window=f"{rootWindow}min",
-        detrend=True,
-        pair=pair_binance,
-        midnightLock=True,
-    )
-    accumulated_parent_data: pd.DataFrame = save_results(
-        result_data, result_charts, rootWindow=rootWindow, output_dir=output_dir
-    )
+    rootWindow_delta = pd.to_timedelta(rootWindow, "min")
+    accumulated_parent_data = []
+    chunks = pd.date_range(startDate, endDate, freq=chunkSize)
+    chunkLen = len(chunks)
+    print(f"Root layer divided into {chunkLen} chunks")
+    for idx, dataStart in enumerate(tqdm(chunks)):
+        start = dataStart - rootWindow_delta
+        end = (dataStart + chunkSize) - pd.to_timedelta(1, "min")
+        if end >= endDate:
+            end = endDate
+
+        print(f"Chunk {idx+1}/{chunkLen}: [{dataStart}] {start} - {end}")
+        result_data, result_charts, result_aggregates = bulk_analysis(
+            start,
+            end=end,
+            window=f"{rootWindow}min",
+            detrend=True,
+            pair=pair_binance,
+            midnightLock=True,
+            keep_ray_running=True,
+        )
+        accumulated_parent_data.append(
+            save_results(
+                result_data, result_charts, rootWindow=rootWindow, output_dir=output_dir
+            )
+        )
+
+    accumulated_parent_data = pd.concat(accumulated_parent_data)
     accumulated_parent_data = preprocess_child_runs(
         overlap,
         rootWindow,
-        runEndDatetime,
+        endDate,
         accumulated_parent_data,
         all_children=True,
     )
@@ -586,23 +631,14 @@ def save_extra_data(
 
 
 if __name__ == "__main__":
-    startDate = (pd.to_datetime("today") - pd.DateOffset(years=5)).floor("D")
-    endDate = (pd.to_datetime("today") - pd.DateOffset(years=4)).floor(
-        "D"
-    ) - pd.to_timedelta("1min")
+    try:
+        startDate = (pd.to_datetime("today") - pd.DateOffset(years=5)).floor("D")
+        endDate = (pd.to_datetime("today") - pd.DateOffset(years=4)).floor(
+            "D"
+        ) - pd.to_timedelta("1min")
 
-    # startDate = None
-    # endDate = None
-    main(startDate=startDate, runEndDatetime=endDate)
-
-
-"""
-Read and Write a "WIndowTracker" file. 
-WindowTracker has window and last run columns
-On run, read WindowTracker, create new "Environment" tasks for each window that needs to be rerun
-When running a window, all subwindows are removed and only replaced if the relevant wavelength is still significant
-If Root Window needs to be rerun, erase all subwindows and start Environment task for that window
-    Create Environment Tasks for all significant frequency/wavelengths, recursively
-    Update WindowTracker file
-Wavelength > Year > Month.csv > run row
-"""
+        # startDate = None
+        # endDate = None
+        main(startDate=startDate, runEndDatetime=endDate)
+    except KeyboardInterrupt:
+        ray.shutdown()

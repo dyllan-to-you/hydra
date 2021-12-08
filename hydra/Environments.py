@@ -907,6 +907,7 @@ def main(
     overlap=None,
     end=None,
     midnightLock=False,
+    keep_ray_running=False,
 ):
     start = pd.to_datetime(start)
     window_delta = pd.to_timedelta(window)
@@ -922,7 +923,7 @@ def main(
             midnightLock=midnightLock,
         )
     )
-    results = run_parallel(tasks)
+    results = run_parallel(tasks, keep_ray_running=keep_ray_running)
     if results is None:
         try:
             sys.exit(0)

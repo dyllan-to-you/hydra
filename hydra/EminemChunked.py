@@ -1,32 +1,42 @@
 import pathlib
-import pickle
-from datetime import datetime
 
 import numpy as np
-from numpy.core.numeric import cross
 import pandas as pd
-from pandas._testing import assert_frame_equal
-from tqdm import tqdm
-import ray
-
-
+import psutil
 import pyarrow
+import ray
 from dataloader import load_prices
 from dataloader.binance_data import update_data
+from pandas._testing import assert_frame_equal
+from tqdm import tqdm
 
 from hydra.Environments import gen_tasks
 from hydra.Environments import main as bulk_analysis
 from hydra.Environments import run_parallel
-from hydra.utils import chunk_list, timeme
+from hydra.utils import chunk_list, flatten, get_mem, mem_used, printd, timeme
 
-ROOT_WINDOW = 90 * 1440
-ROOT_WINDOW = 7 * 1440
+ROOT_WINDOW_DAYS = 7
+ROOT_WINDOW = ROOT_WINDOW_DAYS * 1440
+
 CHUNK_SIZE = 60
+# CHUNK_SIZE = None
 OVERLAP = 0.95
+
+MEMORY_TARGET = 0.35
+MEMORY_MAX = 0.5
+TOTAL_MEMORY_TARGET = psutil.virtual_memory().total * MEMORY_TARGET
+TOTAL_MEMORY_MAX = psutil.virtual_memory().total * MEMORY_MAX
+SAVE_INTERVAL = pd.Timedelta(5, "minutes")
+
+DEBUG = False
 SKIP_SAVE = False
 ABORT_ON_DUPLICATE = False
-
 RUN_SAVE_TEST = False
+
+
+startDate = pd.to_datetime("2018-01-01 00:00:00")
+endDate = pd.to_datetime("2018-01-14 23:59:00")
+span = round((endDate - startDate) / pd.Timedelta(1, "day"))
 
 """
 Check memory consumption before run
@@ -48,7 +58,7 @@ def main(
 ):
     rootWindow_td = pd.to_timedelta(rootWindow, unit="min")
     update_data(pair_binance=pair_binance)
-    output_dir = pathlib.Path("./output/enviro")
+    output_dir = pathlib.Path(f"./output/enviro-chunky-{ROOT_WINDOW_DAYS}-{span}")
     output_dir.mkdir(parents=True, exist_ok=True)
     config_file = output_dir / config
 
@@ -67,7 +77,7 @@ def main(
     else:
         runEndDatetime = pd.to_datetime(runEndDatetime)
 
-    print("runEndDatetime", runEndDatetime)
+    printd("runEndDatetime", runEndDatetime)
 
     # Load previous runs if exists
     try:
@@ -81,7 +91,7 @@ def main(
             time_since_last_run = runEndDatetime - last_run
 
             startDate = last_run + pd.to_timedelta("1d") - rootWindow_td
-            print(f"Last Run: {last_run} {time_since_last_run} ago")
+            printd(f"Last Run: {last_run} {time_since_last_run} ago")
 
             catchup_parent_data: pd.DataFrame = process_root_layer(
                 startDate, runEndDatetime, pair_binance, overlap, rootWindow, output_dir
@@ -90,8 +100,8 @@ def main(
                 catchup_parent_data
             )
     except (FileNotFoundError, OSError):
-        print("! Could not find previous runs.")
-        print(
+        printd("! Could not find previous runs.")
+        printd(
             f"Generating First Run {startDate} - {runEndDatetime}",
         )
 
@@ -99,15 +109,34 @@ def main(
             startDate, runEndDatetime, pair_binance, overlap, rootWindow, output_dir
         )
 
+    estimated_chunk_size = CHUNK_SIZE
+    completed_runs = accumulated_parent_data.iloc[0:0]
+    unsaved_data = []
+    unsaved_charts = []
+    mem_consumed = 0.01
     # history = set(accumulated_parent_data.itertuples(index=False, name=None))
     while not accumulated_parent_data["saved"].all():
+        accumulated_parent_data = accumulated_parent_data.sort_values(
+            ["saved", "child_minPerCycle"], ascending=False
+        )
         save_accumulated_parents(output_dir, accumulated_parent_data)
-        print("\nGenerating tasks for next run")
+
+        printd("\nGenerating tasks for next run")
         # "startDate", "endDate", "window", "minPerCycle"
+
+        # just grab unsaved
         next_runs = accumulated_parent_data.loc[
-            accumulated_parent_data["saved"] == False
+            (accumulated_parent_data["saved"] == False)
+            & (~accumulated_parent_data.index.isin(completed_runs.index))
         ]
-        print("next run", next_runs)
+        # Get next chunk
+        next_runs = next_runs.head(estimated_chunk_size)
+
+        # if estimated_chunk_size > len(next_runs) we don't want it to keep growing
+        estimated_chunk_size = len(next_runs)
+
+        if DEBUG:
+            printd("next run", next_runs)
         tasks = [
             (
                 task,
@@ -147,11 +176,11 @@ def main(
             )
         ]
         if len(tasks) == 0:
-            print("No more tasks!")
+            printd("No more tasks!")
             break
 
         tasks, taskParents = list(zip(*tasks))
-        print("Checking for duplicates")
+        printd("Checking for duplicates")
         task_set = set(tasks)
         if len(tasks) != len(task_set):
             dupeCount = len(tasks) - len(task_set)
@@ -180,66 +209,126 @@ def main(
                     )
                 ]
                 raise Exception(f"{len(dupes)} Duplicates found: {dupes}")
-            print(f"{dupeCount} Duplicates filtered")
-            tasks = task_set
+            printd(f"{dupeCount} Duplicates filtered")
+            tasks = list(task_set)
 
-        # tasks_df = pd.DataFrame(
-        #     tasks, columns=["pair", "startDate", "window", "window_original"]
-        # )
-        # tasks_df = pd.DataFrame(
-        #     taskParents,
-        #     columns=[
-        #         "parent_startDate",
-        #         "parent_endDate",
-        #         "parent_window_original",
-        #         "parent_window",
-        #         "child_minPerCycle",
-        #         "child_window",
-        #         "child_startDate",
-        #         "child_endDate",
-        #         "saved",
-        #         "pair",
-        #         "startDate",
-        #         "window",
-        #         "window_original",
-        #     ],
-        # )
-        # tasks_df["window_original_m"] = tasks_df["window_original"] / pd.to_timedelta(
-        #     "1min"
-        # )
-        # print("=== TASKS ==", tasks_df)
-        # print(
-        #     tasks_df.loc[
-        #         (
-        #             (tasks_df["window_original_m"] >= 8)
-        #             & (tasks_df["window_original_m"] < 13)
-        #         )
-        #     ]
-        # )
+        if DEBUG:
+            tasks_df = pd.DataFrame(
+                tasks, columns=["pair", "startDate", "window", "window_original"]
+            )
+            tasks_df = pd.DataFrame(
+                taskParents,
+                columns=[
+                    "parent_startDate",
+                    "parent_endDate",
+                    "parent_window_original",
+                    "parent_window",
+                    "child_minPerCycle",
+                    "child_window",
+                    "child_startDate",
+                    "child_endDate",
+                    "saved",
+                    "pair",
+                    "startDate",
+                    "window",
+                    "window_original",
+                ],
+            )
+            tasks_df["window_original_m"] = tasks_df[
+                "window_original"
+            ] / pd.to_timedelta("1min")
+            printd("=== TASKS ==", tasks_df)
+            printd(
+                tasks_df.loc[
+                    (
+                        (tasks_df["window_original_m"] >= 8)
+                        & (tasks_df["window_original_m"] < 13)
+                    )
+                ]
+            )
 
-        task_chunks = list(chunk_list(tasks, CHUNK_SIZE))
-        print(f"Executing {len(tasks)} Tasks as {len(task_chunks)} Chunks")
-
-        child_runs = []
-        for chunk in tqdm(task_chunks):
-            results = [
-                result
-                for result in run_parallel(chunk, keep_ray_running=True)
-                if result is not None
-            ]
+        remaining_tasks = tasks
+        while len(remaining_tasks):
+            mem_before_chunk = mem_used() / TOTAL_MEMORY_TARGET
+            printd(f"Executing {len(remaining_tasks)} Tasks")
+            results, completed = run_parallel(
+                tasks,
+                show_progress=True,
+                keep_ray_running=True,
+                memAllowed=TOTAL_MEMORY_MAX,
+                saveInterval=SAVE_INTERVAL,
+            )
+            remaining_tasks = remaining_tasks[completed:]
+            results = [result for result in results if result is not None]
             data, charts = zip(*results)
-            child_runs.append(save_results(data, charts, output_dir=output_dir))
+            mem_after_chunk = mem_used() / TOTAL_MEMORY_TARGET
 
-        child_runs = pd.concat(child_runs)
-        child_runs = preprocess_child_runs(
-            overlap, rootWindow, runEndDatetime, child_runs
+            last_mem_consumed = mem_consumed
+            mem_consumed = mem_after_chunk - mem_before_chunk
+            if mem_consumed <= 0:
+                mem_consumed = last_mem_consumed
+
+            estimated_chunk_size = round(
+                estimated_chunk_size * ((1 - mem_after_chunk) / mem_consumed)
+            )
+            printd(
+                f"{mem_consumed=} Used:{mem_after_chunk:.2f}% {estimated_chunk_size=}"
+            )
+            completed_runs = completed_runs.append(next_runs)
+            unsaved_data.append(data)
+            unsaved_charts.append(charts)
+
+            # Save!
+            if (
+                mem_after_chunk >= 1
+                or estimated_chunk_size < CHUNK_SIZE
+                or len(remaining_tasks)
+            ):
+                printd("+++++ SAVING +++++")
+                printd(
+                    f"{mem_after_chunk >= 1=} \
+                    or {estimated_chunk_size < CHUNK_SIZE=} \
+                    or {len(remaining_tasks)=}"
+                )
+                if len(remaining_tasks):
+                    print(
+                        f"Exited chunk early with {completed}/{completed+len(remaining_tasks)}"
+                    )
+                estimated_chunk_size = CHUNK_SIZE
+
+                save_results(
+                    flatten(unsaved_data),
+                    flatten(unsaved_charts),
+                    output_dir=output_dir,
+                )
+                if DEBUG:
+                    printd("completedRuns", completed_runs)
+                accumulated_parent_data.loc[completed_runs.index, "saved"] = True
+
+                completed_runs = accumulated_parent_data.iloc[0:0]
+                unsaved_data = []
+                unsaved_charts = []
+
+            child_runs = save_results(
+                data, charts, output_dir=output_dir, skipSave=True
+            )
+            child_runs = preprocess_child_runs(
+                overlap, rootWindow, runEndDatetime, child_runs
+            )
+            accumulated_parent_data = accumulated_parent_data.append(child_runs)
+
+    # ensure results get saved when all tasks are run
+    if len(unsaved_data):
+        save_results(
+            flatten(unsaved_data), flatten(unsaved_charts), output_dir=output_dir
         )
-        accumulated_parent_data["saved"] = True
-        accumulated_parent_data = accumulated_parent_data.append(child_runs)
+        printd("completedRuns", completed_runs)
+        accumulated_parent_data.loc[completed_runs.index, "saved"] = True
 
     if ray.is_initialized():
         ray.shutdown()
-    print("All layers run")
+
+    printd("All layers run")
     accumulated_parent_data["saved"] = True
     save_accumulated_parents(output_dir, accumulated_parent_data)
 
@@ -258,16 +347,23 @@ def process_root_layer(
 ):
     rootWindow_delta = pd.to_timedelta(rootWindow, "min")
     accumulated_parent_data = []
+    if chunkSize is None:
+        chunkSize = startDate - endDate
+    elif chunkSize == pd.to_timedelta(0, "days"):
+        chunkSize = pd.to_timedelta(1, "day")
     chunks = pd.date_range(startDate, endDate, freq=chunkSize)
     chunkLen = len(chunks)
-    print(f"Root layer divided into {chunkLen} chunks")
+    printd(f"Root layer divided into {chunkLen} chunks")
+    resultdata_to_save = []
+    resultchart_to_save = []
     for idx, dataStart in enumerate(tqdm(chunks)):
         start = dataStart - rootWindow_delta
+        # TODO: Verify that the 'start' price exists
         end = (dataStart + chunkSize) - pd.to_timedelta(1, "min")
         if end >= endDate:
             end = endDate
 
-        print(f"Chunk {idx+1}/{chunkLen}: [{dataStart}] {start} - {end}")
+        printd(f"Starting Chunk {idx+1}/{chunkLen}: [{dataStart}] {start} - {end}")
         result_data, result_charts, result_aggregates = bulk_analysis(
             start,
             end=end,
@@ -277,9 +373,34 @@ def process_root_layer(
             midnightLock=True,
             keep_ray_running=True,
         )
+        resultdata_to_save.append(result_data)
+        resultchart_to_save.append(result_charts)
+        printd(f"Finished Chunk {idx+1}/{chunkLen}: [{dataStart}] {start} - {end}")
+        printd(
+            f"Mem used: {(mem_used() / psutil.virtual_memory().total):.2f}%",
+        )
+        if mem_used() / TOTAL_MEMORY_TARGET >= 1:
+            result_data = flatten(resultdata_to_save)
+            result_charts = flatten(resultchart_to_save)
+            accumulated_parent_data.append(
+                save_results(
+                    result_data,
+                    result_charts,
+                    rootWindow=rootWindow,
+                    output_dir=output_dir,
+                )
+            )
+            resultdata_to_save = []
+            resultchart_to_save = []
+    if len(resultdata_to_save):
+        result_data = flatten(resultdata_to_save)
+        result_charts = flatten(resultchart_to_save)
         accumulated_parent_data.append(
             save_results(
-                result_data, result_charts, rootWindow=rootWindow, output_dir=output_dir
+                result_data,
+                result_charts,
+                rootWindow=rootWindow,
+                output_dir=output_dir,
             )
         )
 
@@ -334,10 +455,11 @@ def preprocess_child_runs(
     """
 
     # child_minPerCycle is only inaccurate in cases
-    print(
-        accumulated_parent_data["parent_window_original"],
-        accumulated_parent_data["parent_window"],
-    )
+    if DEBUG:
+        printd(
+            accumulated_parent_data["parent_window_original"],
+            accumulated_parent_data["parent_window"],
+        )
     accumulated_parent_data["child_window"] = pd.to_timedelta(
         accumulated_parent_data["child_minPerCycle"]
         * (
@@ -350,27 +472,30 @@ def preprocess_child_runs(
         ),
         unit="min",
     )
-    print(accumulated_parent_data)
-    # ROOT NUMBER DEBUGGING
-    # rootCalc = accumulated_parent_data.loc[
-    #     :,
-    #     [
-    #         "parent_window_original",
-    #         "parent_window",
-    #         "child_minPerCycle",
-    #         "child_window",
-    #     ],
-    # ]
+    if DEBUG:
+        printd(accumulated_parent_data)
+        # ROOT NUMBER DEBUGGING
+        rootCalc = accumulated_parent_data.loc[
+            :,
+            [
+                "parent_window_original",
+                "parent_window",
+                "child_minPerCycle",
+                "child_window",
+            ],
+        ]
 
-    # rootCalc["rootNumber"] = np.around(
-    #     rootWindow / rootCalc["parent_window_original"], 2
-    # )
+        rootCalc["rootNumber"] = np.around(
+            rootWindow / rootCalc["parent_window_original"], 2
+        )
 
-    # assert (np.isclose(rootCalc["rootNumber"] % 1, 0)).all(), f"{rootCalc}"
-    # print(
-    #     rootCalc.loc[(rootCalc["window_original"] > 50) and (rootCalc["window"] < 55)]
-    # )
-    # raise Exception("watwatwat")
+        assert (np.isclose(rootCalc["rootNumber"] % 1, 0)).all(), f"{rootCalc}"
+        printd(
+            rootCalc.loc[
+                (rootCalc["window_original"] > 50) and (rootCalc["window"] < 55)
+            ]
+        )
+        # raise Exception("watwatwat")
 
     accumulated_parent_data["child_startDate"] = (
         accumulated_parent_data["parent_endDate"]
@@ -414,9 +539,9 @@ def save_accumulated_parents(
     output_dir, accumulated_parent_data, filename="accumulated_parents"
 ):
     path = output_dir / f"{filename}.parq"
-    # print(accumulated_parent_data)
+    # printd(accumulated_parent_data)
     if not SKIP_SAVE and len(accumulated_parent_data) > 0:
-        print(f"Saving Accumulated Parent Data to {path}")
+        printd(f"Saving Accumulated Parent Data to {path}")
         try:
             accumulated_parent_data_tosave = accumulated_parent_data.copy()
             accumulated_parent_data_tosave[
@@ -427,27 +552,27 @@ def save_accumulated_parents(
 
             if RUN_SAVE_TEST:
                 loaded = load_accumulated_parents(output_dir, filename)
-                print("a", accumulated_parent_data)
-                print(loaded)
-                # print(f"SAVE TEST! \n{accumulated_parent_data.compare(loaded)}")
+                printd("a", accumulated_parent_data)
+                printd(loaded)
+                # printd(f"SAVE TEST! \n{accumulated_parent_data.compare(loaded)}")
                 assert_frame_equal(accumulated_parent_data, loaded)
                 # assert accumulated_parent_data.equals(
                 #     loaded
                 # ), f"SAVE TEST FAILED! \n{accumulated_parent_data=} \n{loaded=}"
 
         except pyarrow.ArrowNotImplementedError as e:
-            print(accumulated_parent_data.dtypes)
+            printd(accumulated_parent_data.dtypes)
             raise e
 
 
 def load_accumulated_parents(output_dir, filename="accumulated_parents"):
-    print(f"Loading previous runs from {filename}")
+    printd(f"Loading previous runs from {filename}")
     accumulated_parents = pd.read_parquet(output_dir / f"{filename}.parq")
     accumulated_parents["child_window"] = pd.to_timedelta(
         accumulated_parents["child_window"], unit="min"
     )
 
-    # print(accumulated_parents)
+    # printd(accumulated_parents)
     return accumulated_parents
 
 
@@ -459,14 +584,20 @@ def partition_filename_factory(window, prefix="", suffix=""):
     return cb
 
 
-def save_results(result_data, result_charts, rootWindow=ROOT_WINDOW, output_dir=None):
+def save_results(
+    result_data, result_charts, rootWindow=ROOT_WINDOW, output_dir=None, skipSave=False
+):
     # if isinstance(window, str):
     #     window_minutes = pd.to_timedelta(window).total_seconds() / 60
     # else:
     #     window_minutes = window
 
-    result_data_df = save_result_data(output_dir, result_data, rootWindow=rootWindow)
-    extra_data_df = save_extra_data(output_dir, result_charts, rootWindow=rootWindow)
+    result_data_df = save_result_data(
+        output_dir, result_data, rootWindow=rootWindow, skipSave=skipSave
+    )
+    extra_data_df = save_extra_data(
+        output_dir, result_charts, rootWindow=rootWindow, skipSave=skipSave
+    )
 
     accumulated_parent_data: pd.DataFrame = result_data_df[
         ["startDate", "endDate", "window_original", "window", "minPerCycle"]
@@ -484,12 +615,8 @@ def save_results(result_data, result_charts, rootWindow=ROOT_WINDOW, output_dir=
     return accumulated_parent_data
 
 
-def save_result_data(
-    output_dir,
-    result_data,
-    rootWindow=ROOT_WINDOW,
-):
-    print("Saving result data")
+def save_result_data(output_dir, result_data, rootWindow=ROOT_WINDOW, skipSave=False):
+    printd("Processing result data")
     df = pd.concat(result_data)
 
     # Parquet preprocessing
@@ -517,9 +644,9 @@ def save_result_data(
     ).all(), f"{df.loc[~np.isclose(df['rootNumber'] % 1, 0), ['window', 'window_original', 'rootNumber']]}"
 
     df["rootNumber"] = df["rootNumber"].astype(int)
-    # print("RESULTS", df)
-
-    if not SKIP_SAVE:
+    # printd("RESULTS", df)
+    if not SKIP_SAVE and not skipSave:
+        printd("Saving result data")
         try:
             for (year, month, day, rootNum), group in df.groupby(
                 ["year", "month", "day", "rootNumber"]
@@ -535,26 +662,22 @@ def save_result_data(
                     pass
                 finally:
                     group = group[~group.index.duplicated(keep="first")]
-                    group.to_parquet(
+                    group.sort_index().to_parquet(
                         filename,
                         allow_truncated_timestamps=True,
                     )
         except pyarrow.ArrowNotImplementedError as e:
-            print(df.dtypes)
+            printd(df.dtypes)
             raise e
         except pyarrow.ArrowInvalid as e:
-            print(df.dtypes)
+            printd(df.dtypes)
             raise e
 
     return df
 
 
-def save_extra_data(
-    output_dir,
-    result_charts,
-    rootWindow=ROOT_WINDOW,
-):
-    print("Saving extra data")
+def save_extra_data(output_dir, result_charts, rootWindow=ROOT_WINDOW, skipSave=False):
+    printd("Processing extra data")
 
     data = [
         {
@@ -594,10 +717,11 @@ def save_extra_data(
 
     df["rootNumber"] = df["rootNumber"].astype(int)
 
-    # print("CHART", df)
-    # print("XTRA", df.dtypes)
+    # printd("CHART", df)
+    # printd("XTRA", df.dtypes)
     # return df
-    if not SKIP_SAVE:
+    if not SKIP_SAVE and not skipSave:
+        printd("Saving extra data")
         try:
             for (year, month, day, rootNum), group in df.groupby(
                 ["year", "month", "day", "rootNumber"]
@@ -617,25 +741,27 @@ def save_extra_data(
                     pass
                 finally:
                     group = group[~group.index.duplicated(keep="first")]
-                    group.to_parquet(
+                    group.sort_index().to_parquet(
                         filename,
                         allow_truncated_timestamps=True,
                     )
         except pyarrow.ArrowNotImplementedError as e:
-            print("ArrowNotImplementedError", df.dtypes)
+            printd("ArrowNotImplementedError", df.dtypes)
             raise e
         except pyarrow.ArrowInvalid as e:
-            print("ArrowInvalid", df.dtypes)
+            printd("ArrowInvalid", df.dtypes)
             raise e
     return df
 
 
 if __name__ == "__main__":
     try:
-        startDate = (pd.to_datetime("today") - pd.DateOffset(years=5)).floor("D")
-        endDate = (pd.to_datetime("today") - pd.DateOffset(years=4)).floor(
-            "D"
-        ) - pd.to_timedelta("1min")
+        # startDate = (pd.to_datetime("today") - pd.DateOffset(years=5)).floor("D")
+        # endDate = (pd.to_datetime("today") - pd.DateOffset(years=4)).floor(
+        #     "D"
+        # ) - pd.to_timedelta("1min")
+        # startDate = pd.to_datetime("2016-12-08 00:00:00")
+        # endDate = pd.to_datetime("2017-12-07 23:59:00")
 
         # startDate = None
         # endDate = None

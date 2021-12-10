@@ -26,8 +26,11 @@ def flatten(t):
     return [item for sublist in t for item in sublist]
 
 
-def now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def now(str=True):
+    dt = datetime.now()
+    if not str:
+        return dt
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def striped_chunk_list(l: List, n: int):
@@ -55,7 +58,7 @@ def get_mem(unit=None):
 
 
 def printd(*arg, pbar=None):
-    txt = f"[{now()}] ({process.memory_info().rss / 1024 / 1024:.2f}) {' '.join([str(a) for a in arg])}"
+    txt = f"[{now()}] ({get_mem('MB'):.2f}MB) {' '.join([str(a) for a in arg])}"
     if pbar:
         pbar.write(txt)
     else:
@@ -117,3 +120,7 @@ def split_dupes(df: Union[pd.DataFrame, pd.Series]):
         duplicates = duplicates[duplicates.index.duplicated(keep="first")]
         sets.append(uniques)
     return sets
+
+
+def mem_used(total=psutil.virtual_memory().total):
+    return total - psutil.virtual_memory().available

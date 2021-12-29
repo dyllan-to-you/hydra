@@ -1,10 +1,12 @@
 # matplotlib.use("TkAgg")
+from datetime import datetime
 import os
 import pathlib
 from pprint import pprint
 import sys
 import traceback
 import pickle
+from typing import Tuple
 import wave
 from ray.exceptions import RayTaskError
 
@@ -19,7 +21,7 @@ from scipy import stats
 import seaborn as sns
 
 from dataloader import load_prices
-from hydra.utils import printd, timeme
+from hydra.utils import mem_used, now, printd, timeme
 
 
 # pd.set_option("display.max_rows", 50)
@@ -65,8 +67,8 @@ class Trim:
 def fft_price_analysis(
     pair,
     startDate,
-    window=None,
-    window_original=None,
+    window: np.number = None,
+    window_original: np.number = None,
     endDate=None,
     detrend=True,
 ):
@@ -202,6 +204,9 @@ def fft_price_analysis(
     significant_extrapolations = frequency_extrapolations.loc[
         frequency_extrapolations["amplitude"] >= last_price * 0.005
     ]
+    """
+    TODO: instead of creating a prediction for each insignificant combine ifft of all insignificant and create one prediction
+    """
     insignificant_extrapolations = frequency_extrapolations.loc[
         frequency_extrapolations["amplitude"] < last_price * 0.005
     ]
@@ -268,7 +273,9 @@ def fft_price_analysis(
 
     interesting = significant_extrapolations.join(x)
     interesting["figname"] = (
-        interesting["figname"] + "|w" + interesting["minPerCycle"].astype(str)
+        interesting["figname"]
+        + f"|p{window_original}|c"
+        + interesting["minPerCycle"].astype(str)
     )
     interesting = interesting.set_index("figname")
 
@@ -798,9 +805,16 @@ def render_agg_chart(frequencies_kept_df):
 
 
 @timeme
-def run_parallel(tasks, keep_ray_running=False):
+def run_parallel(
+    tasks,
+    keep_ray_running=False,
+    show_progress=False,
+    memAllowed=None,
+    saveInterval=False,
+):
     if sys.argv[-1] == "ray":
         errorThrown = False
+        start = datetime.now()
         try:
             if not ray.is_initialized():
                 ray.init(
@@ -809,15 +823,25 @@ def run_parallel(tasks, keep_ray_running=False):
             # cProfile.run("main()")
 
             result_refs = []
+            if show_progress:
+                tasks = tqdm(tasks)
             for idx, task in enumerate(tasks):
                 if len(result_refs) > NUM_CORES:
                     ray.wait(result_refs, num_returns=idx - NUM_CORES)
+
+                if (memAllowed is not None and mem_used() / memAllowed >= 1) or (
+                    saveInterval and datetime.now() - start > saveInterval
+                ):
+                    return ray.get(result_refs), len(result_refs)
+
                 if isinstance(task, tuple):
                     result_refs.append(fft_price_analysis_ray.remote(*task))
                 else:
                     result_refs.append(
                         fft_price_analysis_ray.remote(*task["args"], **task["kwargs"])
                     )
+            if memAllowed is not None:
+                return ray.get(result_refs), len(result_refs)
             return ray.get(result_refs)
         except KeyboardInterrupt as e:
             errorThrown = True
@@ -830,7 +854,7 @@ def run_parallel(tasks, keep_ray_running=False):
             raise e
             # return None
         finally:
-            if errorThrown or (not keep_ray_running and ray.is_initialized()):
+            if ray.is_initialized() and (errorThrown or not keep_ray_running):
                 ray.shutdown()
     else:
         return [

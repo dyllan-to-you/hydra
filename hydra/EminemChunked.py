@@ -13,37 +13,31 @@ from tqdm import tqdm
 from hydra.Environments import gen_tasks
 from hydra.Environments import main as bulk_analysis
 from hydra.Environments import run_parallel
-from hydra.utils import chunk_list, flatten, get_mem, mem_used, printd, timeme
+from hydra.utils import flatten, mem_used, printd, timeme
+
+
+START_DATE = pd.to_datetime("2018-01-01 00:00:00")
+END_DATE = pd.to_datetime("2018-12-31 23:59:00")
+SPAN = round((END_DATE - START_DATE) / pd.Timedelta(1, "day"))
 
 ROOT_WINDOW_DAYS = 7
 ROOT_WINDOW = ROOT_WINDOW_DAYS * 1440
-
-CHUNK_SIZE = 60
-# CHUNK_SIZE = None
 OVERLAP = 0.95
 
-MEMORY_TARGET = 0.35
-MEMORY_MAX = 0.5
-TOTAL_MEMORY_TARGET = psutil.virtual_memory().total * MEMORY_TARGET
-TOTAL_MEMORY_MAX = psutil.virtual_memory().total * MEMORY_MAX
-SAVE_INTERVAL = pd.Timedelta(5, "minutes")
 
 DEBUG = False
 SKIP_SAVE = False
 ABORT_ON_DUPLICATE = False
 RUN_SAVE_TEST = False
 
+CHUNK_SIZE = 60
+# CHUNK_SIZE = None
 
-startDate = pd.to_datetime("2018-01-01 00:00:00")
-endDate = pd.to_datetime("2018-01-14 23:59:00")
-span = round((endDate - startDate) / pd.Timedelta(1, "day"))
-
-"""
-Check memory consumption before run
-First run uses minimum chunk size
-after run, get current memory
-    use to derive max chunk size (with buffer)
-"""
+SAVE_INTERVAL = pd.Timedelta(1, "minutes")
+MEMORY_TARGET = 0.2
+MEMORY_MAX = 0.5
+TOTAL_MEMORY_TARGET = psutil.virtual_memory().total * MEMORY_TARGET
+TOTAL_MEMORY_MAX = psutil.virtual_memory().total * MEMORY_MAX
 
 
 @timeme
@@ -58,7 +52,7 @@ def main(
 ):
     rootWindow_td = pd.to_timedelta(rootWindow, unit="min")
     update_data(pair_binance=pair_binance)
-    output_dir = pathlib.Path(f"./output/enviro-chunky-{ROOT_WINDOW_DAYS}-{span}")
+    output_dir = pathlib.Path(f"./output/enviro-chunky1-{ROOT_WINDOW_DAYS}-{SPAN}")
     output_dir.mkdir(parents=True, exist_ok=True)
     config_file = output_dir / config
 
@@ -238,14 +232,6 @@ def main(
                 "window_original"
             ] / pd.to_timedelta("1min")
             printd("=== TASKS ==", tasks_df)
-            printd(
-                tasks_df.loc[
-                    (
-                        (tasks_df["window_original_m"] >= 8)
-                        & (tasks_df["window_original_m"] < 13)
-                    )
-                ]
-            )
 
         remaining_tasks = tasks
         while len(remaining_tasks):
@@ -460,6 +446,7 @@ def preprocess_child_runs(
             accumulated_parent_data["parent_window_original"],
             accumulated_parent_data["parent_window"],
         )
+
     accumulated_parent_data["child_window"] = pd.to_timedelta(
         accumulated_parent_data["child_minPerCycle"]
         * (
@@ -472,6 +459,7 @@ def preprocess_child_runs(
         ),
         unit="min",
     )
+
     if DEBUG:
         printd(accumulated_parent_data)
         # ROOT NUMBER DEBUGGING
@@ -615,7 +603,12 @@ def save_results(
     return accumulated_parent_data
 
 
-def save_result_data(output_dir, result_data, rootWindow=ROOT_WINDOW, skipSave=False):
+def save_result_data(
+    output_dir,
+    result_data,
+    rootWindow=ROOT_WINDOW,
+    skipSave=False,
+):
     printd("Processing result data")
     df = pd.concat(result_data)
 
@@ -676,7 +669,12 @@ def save_result_data(output_dir, result_data, rootWindow=ROOT_WINDOW, skipSave=F
     return df
 
 
-def save_extra_data(output_dir, result_charts, rootWindow=ROOT_WINDOW, skipSave=False):
+def save_extra_data(
+    output_dir,
+    result_charts,
+    rootWindow=ROOT_WINDOW,
+    skipSave=False,
+):
     printd("Processing extra data")
 
     data = [
@@ -756,15 +754,6 @@ def save_extra_data(output_dir, result_charts, rootWindow=ROOT_WINDOW, skipSave=
 
 if __name__ == "__main__":
     try:
-        # startDate = (pd.to_datetime("today") - pd.DateOffset(years=5)).floor("D")
-        # endDate = (pd.to_datetime("today") - pd.DateOffset(years=4)).floor(
-        #     "D"
-        # ) - pd.to_timedelta("1min")
-        # startDate = pd.to_datetime("2016-12-08 00:00:00")
-        # endDate = pd.to_datetime("2017-12-07 23:59:00")
-
-        # startDate = None
-        # endDate = None
-        main(startDate=startDate, runEndDatetime=endDate)
+        main(startDate=START_DATE, runEndDatetime=END_DATE)
     except KeyboardInterrupt:
         ray.shutdown()

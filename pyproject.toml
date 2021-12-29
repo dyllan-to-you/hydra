@@ -29,6 +29,7 @@ vectorbt = "0.17.4"
 PyQt5 = "^5.15.4"
 seaborn = "^0.11.2"
 python-binance = "^1.0.15"
+ipykernel = "^6.6.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

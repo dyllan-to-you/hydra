@@ -160,6 +160,15 @@ def fft_price_analysis(
     ) = constructed
     frequencies_kept.name = startDate
 
+    """
+    TODO: instead of creating a prediction for each insignificant combine ifft of all insignificant and create one prediction 
+    1. Seperate significant and insignificant freqs before extrapolations
+    2. Set insignificant frequency accumulation as negative number (avg of contributing frequencies^-1) as one of the children
+    3. Ignore <= 0 wavelength children for recursive runs (right now its just excluding 0)
+    """
+
+    
+
     # max_amplitude_ifft=None
     extrapolations = [
         extrapolate_ifft(
@@ -204,9 +213,7 @@ def fft_price_analysis(
     significant_extrapolations = frequency_extrapolations.loc[
         frequency_extrapolations["amplitude"] >= last_price * 0.005
     ]
-    """
-    TODO: instead of creating a prediction for each insignificant combine ifft of all insignificant and create one prediction
-    """
+    
     insignificant_extrapolations = frequency_extrapolations.loc[
         frequency_extrapolations["amplitude"] < last_price * 0.005
     ]

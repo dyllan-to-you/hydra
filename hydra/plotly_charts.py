@@ -58,6 +58,7 @@ def data_resample_factory(data: "dict[int, pd.DataFrame]", onlySlice=False):
         # fakestart = start_date - window_size
         # fakeend = end_date + window_size
         interval_data = data[interval]
+        try:
         precise_data = interval_data.loc[start_date:end_date]
         if onlySlice:
             return precise_data
@@ -68,20 +69,31 @@ def data_resample_factory(data: "dict[int, pd.DataFrame]", onlySlice=False):
             ).sort_index()
 
         return the_data
+        except Exception as e:
+            print(interval_data.index, start_date, end_date)
+            raise e
 
     return resample_data
+
+
+def resample_prices(prices: pd.DataFrame, base_interval=1, desired_interval=60):
+    if desired_interval < base_interval:
+        raise Exception(
+            f"Cannot resample {base_interval}m data into {desired_interval}m"
+        )
+    return prices.resample(f"{desired_interval}min").agg(
+        {"open": "first", "high": "max", "low": "min", "close": "last"}
+    )
 
 
 def get_price_trace(pair, startDate, endDate):
     prices = {}
     prices[1] = load_prices(pair, startDate=startDate, endDate=endDate, interval=1)
-    prices[5] = load_prices(pair, startDate=startDate, endDate=endDate, interval=5)
-    prices[15] = load_prices(pair, startDate=startDate, endDate=endDate, interval=15)
-    prices[60] = load_prices(pair, startDate=startDate, endDate=endDate, interval=60)
-    prices[720] = load_prices(pair, startDate=startDate, endDate=endDate, interval=720)
-    prices[1440] = load_prices(
-        pair, startDate=startDate, endDate=endDate, interval=1440
-    )
+    prices[5] = resample_prices(prices[1], base_interval=1, desired_interval=5)
+    prices[15] = resample_prices(prices[1], base_interval=1, desired_interval=15)
+    prices[60] = resample_prices(prices[1], base_interval=1, desired_interval=60)
+    prices[720] = resample_prices(prices[1], base_interval=1, desired_interval=720)
+    prices[1440] = resample_prices(prices[1], base_interval=1, desired_interval=1440)
 
     candlestick = go.Candlestick(
         x=prices[1440].index,

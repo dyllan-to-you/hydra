@@ -52,23 +52,33 @@ def supersample_data(
     return res
 
 
-def data_resample_factory(data: "dict[int, pd.DataFrame]", onlySlice=False):
-    def resample_data(start_date, end_date, interval):
-        window_size = end_date - start_date
+def data_resample_factory(
+    data: "dict[int, pd.DataFrame]", onlySlice=False, metaHandler=None
+):
+    _data = data
+
+    def resample_data(start_date, end_date, interval, meta={}):
+        # nonlocal _data
+
+        # window_size = end_date - start_date
         # fakestart = start_date - window_size
         # fakeend = end_date + window_size
+
+        # if metaHandler is not None:
+        # _data = metaHandler(_data, meta)
+
         interval_data = data[interval]
         try:
-        precise_data = interval_data.loc[start_date:end_date]
-        if onlySlice:
-            return precise_data
-        else:
-            big_data = data[intervals[-1]]
-            the_data = pd.concat(
-                [big_data.loc[:start_date], big_data.loc[end_date:], precise_data]
-            ).sort_index()
+            precise_data = interval_data.loc[start_date:end_date]
+            if onlySlice:
+                return precise_data
+            else:
+                big_data = data[intervals[-1]]
+                the_data = pd.concat(
+                    [big_data.loc[:start_date], big_data.loc[end_date:], precise_data]
+                ).sort_index()
 
-        return the_data
+            return the_data
         except Exception as e:
             print(interval_data.index, start_date, end_date)
             raise e
@@ -140,16 +150,21 @@ TODO: extrapolate fft aggregate (just render min/max prediction)
 class PlotlyPriceChart:
     def __init__(self, pair, startDate, endDate, loc):
         self.data_idx = 0
+        self.meta = {"timeSlider": 50}
         self.handle_list = []
         self.handler = self.handler_factory()
         self.slider_handler = self.slider_handler_factory()
+        self.slider_meta_handler = self.slider_meta_handler_factory()
         self.figure: go.FigureWidget = None
         self.startDate = startDate
         self.endDate = endDate
-        self.generate_figure(pair, loc=loc)
         self.xrange = [startDate, endDate]
+        self.generate_figure(pair, loc=loc)
 
     def slicer(self, start, end):
+        # self.figure.update_layout(title="slicer" + str(self.meta))
+        timeSlider = self.meta.get("timeSlider", None)
+
         size = 250
         start_date = pd.to_datetime(start)
         end_date = pd.to_datetime(end)
@@ -162,14 +177,20 @@ class PlotlyPriceChart:
                 interval = i
                 break
 
-        # f = open('log.txt', "a")
-        # f.write(f"[{utils.now()}] {start} {end} {delta} {delta_m} {interval} \n{precise_price} \n {fakestart} {fakeend} \n{the_price.loc[fakestart:fakeend]}\n")
-        # f.close()
+        # self.figure.update_layout(title="slicer halfway" + str(self.meta))
+        # utils.write(f"[{utils.now()}] {start} {end} {delta} {delta_m} {interval} \n{precise_price} \n {fakestart} {fakeend} \n{the_price.loc[fakestart:fakeend]}\n")
         with self.figure.batch_update():
+            # self.figure.update_layout(title="slicer batshit" + str(self.meta))
             for resample, trace_idx, fields in self.handle_list:
                 the_data = resample(start_date, end_date, interval)
-                if self.figure.layout.title.text is not None:
-                    slider_input = int(self.figure.layout.title.text[0:2])
+
+                # slider_handler
+                # if self.figure.layout.title.text is not None:
+                #     slider_input = int(self.figure.layout.title.text[0:2])
+
+                if timeSlider is not None:
+                    slider_input = timeSlider
+
                     if slider_input > 0:
                         sliderEnd = start_date + (delta * slider_input / 100)
                         if trace_idx > 0:
@@ -186,6 +207,10 @@ class PlotlyPriceChart:
 
                     setattr(trace, key, value)
 
+            # self.figure.update_layout(
+            #     title="slicer cray" + str(self.meta) + str(timeSlider)
+            # )
+
     def add_trace(
         self,
         trace,
@@ -194,6 +219,7 @@ class PlotlyPriceChart:
         loc=(2, 1),
         traceArgs={},
         onlySlice=False,
+        metaHandler=None,
         **kwargs,
     ):
         if "log" in kwargs:
@@ -202,7 +228,11 @@ class PlotlyPriceChart:
         self.figure.add_trace(trace, row=row, col=col, **traceArgs)
         if data is not None and trace is not None:
             self.register_handler(
-                (data_resample_factory(data, onlySlice), self.data_idx, fields)
+                (
+                    data_resample_factory(data, onlySlice, metaHandler),
+                    self.data_idx,
+                    fields,
+                )
             )
         self.data_idx += 1
 
@@ -216,6 +246,21 @@ class PlotlyPriceChart:
 
     def slider_handler_factory(self):
         def handler(obj, title):
+            # utils.write("slidercall", title)
+            slider_input = int(title.text[0:2])
+            self.meta["timeSlider"] = slider_input
+            [start, end] = self.xrange
+            self.slicer(start, end)
+
+        return handler
+
+    def slider_meta_handler_factory(self):
+        def handler(obj, meta):
+            # if self.meta.timeSlider != meta.timeSlider:
+            self.meta = {**self.meta, **meta}
+            # utils.write("metacall", self.meta)
+            self.figure.update_layout(title=str(self.meta))
+
             [start, end] = self.xrange
             self.slicer(start, end)
 
@@ -225,7 +270,8 @@ class PlotlyPriceChart:
         self.handle_list.append(data)
         self.slicer(self.startDate, self.endDate)
         self.figure.layout.on_change(self.handler, "xaxis")
-        self.figure.layout.on_change(self.slider_handler, "title")
+        # self.figure.layout.on_change(self.slider_handler, "title")
+        self.figure.layout.on_change(self.slider_meta_handler, "meta")
 
     def generate_figure(self, pair, loc):
         rows, cols = loc
@@ -252,12 +298,12 @@ class PlotlyPriceChart:
     def render(self, zoomStart, zoomEnd, **kwargs):
         self.figure.update_layout(
             go.Layout(
-                title=f"50% from start (0 = show all)",
+                title=f"Charts!",
                 barmode="overlay",
                 yaxis={"fixedrange": False},
                 yaxis2={"fixedrange": False},
                 height=800,
-                xaxis=dict(range=[zoomStart, zoomEnd])
+                xaxis=dict(range=[zoomStart, zoomEnd]),
                 # yaxis2=dict(
                 #     fixedrange=False,
                 #     domain=[0, 1],

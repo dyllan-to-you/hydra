@@ -42,7 +42,7 @@ def main(
 ):
     rootWindow_td = pd.to_timedelta(rootWindow, unit="min")
     update_data(pair_binance=pair_binance)
-    output_dir = pathlib.Path(f"./output/enviro-origin1-{ROOT_WINDOW_DAYS}-{SPAN}")
+    output_dir = pathlib.Path(f"./output/enviro-origin-{ROOT_WINDOW_DAYS}-{SPAN}")
     output_dir.mkdir(parents=True, exist_ok=True)
     config_file = output_dir / config
 

@@ -57,23 +57,23 @@ def data_resample_factory(
 ):
     _data = data
 
-    def resample_data(start_date, end_date, interval, meta={}):
-        # nonlocal _data
+    def resample_data(start_date, end_date, interval, traceIdx, meta={}):
+        nonlocal _data
 
         # window_size = end_date - start_date
         # fakestart = start_date - window_size
         # fakeend = end_date + window_size
+        utils.write(f"resampling {traceIdx} {meta}")
+        if metaHandler is not None and meta:
+            _data = metaHandler(_data, meta)
 
-        # if metaHandler is not None:
-        # _data = metaHandler(_data, meta)
-
-        interval_data = data[interval]
+        interval_data = _data[interval]
         try:
             precise_data = interval_data.loc[start_date:end_date]
             if onlySlice:
                 return precise_data
             else:
-                big_data = data[intervals[-1]]
+                big_data = _data[intervals[-1]]
                 the_data = pd.concat(
                     [big_data.loc[:start_date], big_data.loc[end_date:], precise_data]
                 ).sort_index()
@@ -182,7 +182,9 @@ class PlotlyPriceChart:
         with self.figure.batch_update():
             # self.figure.update_layout(title="slicer batshit" + str(self.meta))
             for resample, trace_idx, fields in self.handle_list:
-                the_data = resample(start_date, end_date, interval)
+                the_data = resample(
+                    start_date, end_date, interval, trace_idx, self.meta
+                )
 
                 # slider_handler
                 # if self.figure.layout.title.text is not None:
@@ -227,6 +229,7 @@ class PlotlyPriceChart:
         row, col = loc
         self.figure.add_trace(trace, row=row, col=col, **traceArgs)
         if data is not None and trace is not None:
+            print("registering handler", self.data_idx, metaHandler is not None)
             self.register_handler(
                 (
                     data_resample_factory(data, onlySlice, metaHandler),

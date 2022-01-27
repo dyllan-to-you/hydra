@@ -167,8 +167,6 @@ def fft_price_analysis(
     3. Ignore <= 0 wavelength children for recursive runs (right now its just excluding 0)
     """
 
-    
-
     # max_amplitude_ifft=None
     extrapolations = [
         extrapolate_ifft(
@@ -213,7 +211,7 @@ def fft_price_analysis(
     significant_extrapolations = frequency_extrapolations.loc[
         frequency_extrapolations["amplitude"] >= last_price * 0.005
     ]
-    
+
     insignificant_extrapolations = frequency_extrapolations.loc[
         frequency_extrapolations["amplitude"] < last_price * 0.005
     ]
@@ -882,6 +880,7 @@ def gen_tasks(
     detrend=True,
     tuple=False,
 ):
+    # printd(f"gen_tasks {start=} {end=} {window=} {pair=} {midnightLock=} {overlap=} ")
     start = pd.to_datetime(start)
     end = pd.to_datetime(end)
     # Even numbered price length can result in a 3x speedup!
@@ -898,6 +897,9 @@ def gen_tasks(
         if overlap is not None:
             window_increment *= 1 - overlap
             window_increment = window_increment.round("1min")
+
+        if window_increment > pd.Timedelta(days=1):
+            window_increment = pd.DateOffset(days=1)
         # noninclusive of first run to avoid duplicates when running recursively
         start += window_increment
     if window_increment == pd.to_timedelta("0min"):
@@ -906,10 +908,14 @@ def gen_tasks(
     prices = load_prices(pair, startDate=start, endDate=end)["open"]
     start = prices.index[0]
     end = prices.index[-1]
-
+    isFirst = True
     try:
         for startDate in pd.date_range(start=start, end=end, freq=window_increment):
             if startDate + window > end:
+                if isFirst:
+                    print(
+                        "Gen Task Who's on first", start, end, window, window_increment
+                    )
                 break
             if midnightLock:
                 assert (startDate + window).minute == 0
@@ -925,6 +931,7 @@ def gen_tasks(
                         "window_original": window_original,
                     },
                 }
+            isFirst = False
     except ZeroDivisionError as e:
         print("Task Gen Divide by Zero Error", start, end, window_increment)
         raise e

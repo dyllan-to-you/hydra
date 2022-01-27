@@ -52,7 +52,7 @@ def main(
 ):
     rootWindow_td = pd.to_timedelta(rootWindow, unit="min")
     update_data(pair_binance=pair_binance)
-    output_dir = pathlib.Path(f"./output/enviro-chunky1-{ROOT_WINDOW_DAYS}-{SPAN}")
+    output_dir = pathlib.Path(f"./output/enviro-chunky-{ROOT_WINDOW_DAYS}-{SPAN}")
     output_dir.mkdir(parents=True, exist_ok=True)
     config_file = output_dir / config
 
@@ -77,9 +77,12 @@ def main(
     try:
         accumulated_parent_data = load_accumulated_parents(output_dir)
 
+        printd("Found previous runs.")
+
         last_run = accumulated_parent_data.loc[
             accumulated_parent_data["parent_window_original"] == rootWindow
         ]["parent_endDate"].max()
+
         # If last run before current runEndDatetime, catch up to now
         if last_run < runEndDatetime.date():
             time_since_last_run = runEndDatetime - last_run
@@ -104,7 +107,7 @@ def main(
         )
 
     estimated_chunk_size = CHUNK_SIZE
-    completed_runs = accumulated_parent_data.iloc[0:0]
+    completed_runs_df: pd.DataFrame = accumulated_parent_data.iloc[0:0]
     unsaved_data = []
     unsaved_charts = []
     mem_consumed = 0.01
@@ -115,22 +118,28 @@ def main(
         )
         save_accumulated_parents(output_dir, accumulated_parent_data)
 
-        printd("\nGenerating tasks for next run")
         # "startDate", "endDate", "window", "minPerCycle"
 
+        printd("Determining next run")
         # just grab unsaved
         next_runs = accumulated_parent_data.loc[
             (accumulated_parent_data["saved"] == False)
-            & (~accumulated_parent_data.index.isin(completed_runs.index))
+            & (~accumulated_parent_data.index.isin(completed_runs_df.index))
         ]
+        printd(
+            "unsaved runs",
+            len(accumulated_parent_data.loc[accumulated_parent_data["saved"] == False]),
+            f"({len(accumulated_parent_data)})",
+        )
         # Get next chunk
         next_runs = next_runs.head(estimated_chunk_size)
 
         # if estimated_chunk_size > len(next_runs) we don't want it to keep growing
         estimated_chunk_size = len(next_runs)
 
-        if DEBUG:
-            printd("next run", next_runs)
+        printd("next run", estimated_chunk_size, len(next_runs))
+        # print(next_runs)
+        printd("Generating tasks for next run")
         tasks = [
             (
                 task,
@@ -169,11 +178,13 @@ def main(
                 )
             )
         ]
+
         if len(tasks) == 0:
             printd("No more tasks!")
             break
 
         tasks, taskParents = list(zip(*tasks))
+
         printd("Checking for duplicates")
         task_set = set(tasks)
         if len(tasks) != len(task_set):
@@ -233,6 +244,7 @@ def main(
             ] / pd.to_timedelta("1min")
             printd("=== TASKS ==", tasks_df)
 
+        #
         remaining_tasks = tasks
         while len(remaining_tasks):
             mem_before_chunk = mem_used() / TOTAL_MEMORY_TARGET
@@ -247,6 +259,7 @@ def main(
             remaining_tasks = remaining_tasks[completed:]
             results = [result for result in results if result is not None]
             data, charts = zip(*results)
+
             mem_after_chunk = mem_used() / TOTAL_MEMORY_TARGET
 
             last_mem_consumed = mem_consumed
@@ -260,7 +273,8 @@ def main(
             printd(
                 f"{mem_consumed=} Used:{mem_after_chunk:.2f}% {estimated_chunk_size=}"
             )
-            completed_runs = completed_runs.append(next_runs)
+            completed_runs_df = completed_runs_df.append(next_runs)
+
             unsaved_data.append(data)
             unsaved_charts.append(charts)
 
@@ -288,10 +302,10 @@ def main(
                     output_dir=output_dir,
                 )
                 if DEBUG:
-                    printd("completedRuns", completed_runs)
-                accumulated_parent_data.loc[completed_runs.index, "saved"] = True
+                    printd("completedRuns", completed_runs_df)
+                accumulated_parent_data.loc[completed_runs_df.index, "saved"] = True
 
-                completed_runs = accumulated_parent_data.iloc[0:0]
+                completed_runs_df = accumulated_parent_data.iloc[0:0]
                 unsaved_data = []
                 unsaved_charts = []
 
@@ -308,14 +322,14 @@ def main(
         save_results(
             flatten(unsaved_data), flatten(unsaved_charts), output_dir=output_dir
         )
-        printd("completedRuns", completed_runs)
-        accumulated_parent_data.loc[completed_runs.index, "saved"] = True
+        printd("completedRuns", completed_runs_df)
+        accumulated_parent_data.loc[completed_runs_df.index, "saved"] = True
 
     if ray.is_initialized():
         ray.shutdown()
 
     printd("All layers run")
-    accumulated_parent_data["saved"] = True
+    # accumulated_parent_data["saved"] = True
     save_accumulated_parents(output_dir, accumulated_parent_data)
 
     return
@@ -334,7 +348,7 @@ def process_root_layer(
     rootWindow_delta = pd.to_timedelta(rootWindow, "min")
     accumulated_parent_data = []
     if chunkSize is None:
-        chunkSize = startDate - endDate
+        chunkSize = endDate - startDate
     elif chunkSize == pd.to_timedelta(0, "days"):
         chunkSize = pd.to_timedelta(1, "day")
     chunks = pd.date_range(startDate, endDate, freq=chunkSize)
@@ -349,7 +363,7 @@ def process_root_layer(
         if end >= endDate:
             end = endDate
 
-        printd(f"Starting Chunk {idx+1}/{chunkLen}: [{dataStart}] {start} - {end}")
+        printd(f"Starting Chunk {idx+1}/{chunkLen}: ({dataStart})=>{start} - {end}")
         result_data, result_charts, result_aggregates = bulk_analysis(
             start,
             end=end,
@@ -366,6 +380,7 @@ def process_root_layer(
             f"Mem used: {(mem_used() / psutil.virtual_memory().total):.2f}%",
         )
         if mem_used() / TOTAL_MEMORY_TARGET >= 1:
+            printd("Memory Target hit: Saving")
             result_data = flatten(resultdata_to_save)
             result_charts = flatten(resultchart_to_save)
             accumulated_parent_data.append(
@@ -379,6 +394,7 @@ def process_root_layer(
             resultdata_to_save = []
             resultchart_to_save = []
     if len(resultdata_to_save):
+        printd("Finished Root Layer: Saving")
         result_data = flatten(resultdata_to_save)
         result_charts = flatten(resultchart_to_save)
         accumulated_parent_data.append(
@@ -460,30 +476,31 @@ def preprocess_child_runs(
         unit="min",
     )
 
-    if DEBUG:
-        printd(accumulated_parent_data)
-        # ROOT NUMBER DEBUGGING
-        rootCalc = accumulated_parent_data.loc[
-            :,
-            [
-                "parent_window_original",
-                "parent_window",
-                "child_minPerCycle",
-                "child_window",
-            ],
-        ]
+    # if DEBUG:
+    #     printd(accumulated_parent_data)
+    #     # ROOT NUMBER DEBUGGING
+    #     rootCalc = accumulated_parent_data.loc[
+    #         :,
+    #         [
+    #             "parent_window_original",
+    #             "parent_window",
+    #             "child_minPerCycle",
+    #             "child_window",
+    #         ],
+    #     ]
 
-        rootCalc["rootNumber"] = np.around(
-            rootWindow / rootCalc["parent_window_original"], 2
-        )
+    #     rootCalc["rootNumber"] = np.around(
+    #         rootWindow / rootCalc["parent_window_original"], 2
+    #     )
 
-        assert (np.isclose(rootCalc["rootNumber"] % 1, 0)).all(), f"{rootCalc}"
-        printd(
-            rootCalc.loc[
-                (rootCalc["window_original"] > 50) and (rootCalc["window"] < 55)
-            ]
-        )
-        # raise Exception("watwatwat")
+    #     assert (np.isclose(rootCalc["rootNumber"] % 1, 0)).all(), f"{rootCalc}"
+    #     printd(
+    #         rootCalc.loc[
+    #             (rootCalc["parent_window_original"] > 50)
+    #             and (rootCalc["parent_window"] < 55)
+    #         ]
+    #     )
+    #     raise Exception("watwatwat")
 
     accumulated_parent_data["child_startDate"] = (
         accumulated_parent_data["parent_endDate"]

@@ -65,10 +65,23 @@ def printd(*arg, pbar=None):
         print(txt)
 
 
-def write(message, filename="log.txt"):
-    f = open(filename, "a")
-    f.write(f"[{now()}] {message}\n")
-    f.close()
+filemap = dict()
+
+
+def write(*message, filename="log.txt"):
+    msg = " ".join([str(a) for a in message])
+    msg = f"[{now()}] {msg}\n"
+    # print(msg)
+    # return
+    fp = filemap.get(filename, None)
+    if fp is None:
+        fp = open(filename, "a")
+        filemap[filename] = fp
+    # fp = open(filename, "a")
+    fp.write(msg)
+    fp.flush()
+    # typically the above line would do. however this is used to ensure that the file is written
+    os.fsync(fp.fileno())
 
 
 def get_closest(num, list):

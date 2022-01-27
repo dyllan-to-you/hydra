@@ -57,7 +57,7 @@ def data_resample_factory(
 ):
     _data = data
 
-    def resample_data(start_date, end_date, interval, traceIdx, meta={}):
+    def resample_data(start_date, end_date, interval, traceIdx, figure, meta={}):
         nonlocal _data
 
         # window_size = end_date - start_date
@@ -65,7 +65,7 @@ def data_resample_factory(
         # fakeend = end_date + window_size
         utils.write(f"resampling {traceIdx} {meta}")
         if metaHandler is not None and meta:
-            _data = metaHandler(_data, meta)
+            _data = metaHandler(_data, figure, meta)
 
         interval_data = _data[interval]
         try:
@@ -183,7 +183,7 @@ class PlotlyPriceChart:
             # self.figure.update_layout(title="slicer batshit" + str(self.meta))
             for resample, trace_idx, fields in self.handle_list:
                 the_data = resample(
-                    start_date, end_date, interval, trace_idx, self.meta
+                    start_date, end_date, interval, trace_idx, self.figure, self.meta
                 )
 
                 # slider_handler

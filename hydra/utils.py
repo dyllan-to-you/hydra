@@ -1,3 +1,4 @@
+import functools
 import threading
 from datetime import datetime
 from functools import wraps
@@ -5,6 +6,7 @@ from timeit import default_timer as timer
 from typing import List, Union
 import psutil
 import os
+import numpy as np
 import pandas as pd
 
 process = psutil.Process(os.getpid())
@@ -157,7 +159,7 @@ def debounce(wait_time):
 
             def call_function():
                 debounced._timer = None
-                write(f"!!! Debounced fn {function.__name__} executing")
+                write(f"!!! Debounced fn {function.__name__} executing {wait_time}")
                 debounced._counter = 0
                 return function(*args, **kwargs)
 
@@ -173,7 +175,26 @@ def debounce(wait_time):
 
         debounced._timer = None
         debounced._counter = 0
+        # debounced._totalTime = 0
         return debounced
 
     return decorator
 
+
+def rsetattr(obj, attr, val, separator="."):
+    pre, _, post = attr.rpartition(separator)
+    return setattr(rgetattr(obj, pre) if pre else obj, post, val)
+
+
+# using wonder's beautiful simplification: https://stackoverflow.com/questions/31174295/getattr-and-setattr-on-nested-objects/31174427?noredirect=1#comment86638618_31174427
+
+
+def rgetattr(obj, attr, *args, separator="."):
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+
+    return functools.reduce(_getattr, [obj] + attr.split(separator))
+
+
+def getClosestIndex_np(arr, val):
+    return np.argmin(np.abs(np.array(arr) - val))

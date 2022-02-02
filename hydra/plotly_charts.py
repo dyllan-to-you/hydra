@@ -67,13 +67,19 @@ def data_resample_factory(
         if metaHandler is not None and meta:
             _data = metaHandler(_data, figure, meta)
 
-        interval_data = _data[interval]
+        interval_data: pd.DataFrame = _data[interval]
+        if "visible" in interval_data.columns:
+            interval_data = interval_data.loc[interval_data["visible"]]
+
         try:
             precise_data = interval_data.loc[start_date:end_date]
             if onlySlice:
                 return precise_data
             else:
                 big_data = _data[intervals[-1]]
+                if "visible" in big_data.columns:
+                    big_data = big_data.loc[big_data["visible"]]
+
                 the_data = pd.concat(
                     [big_data.loc[:start_date], big_data.loc[end_date:], precise_data]
                 ).sort_index()
@@ -202,9 +208,13 @@ class PlotlyPriceChart:
                     try:
                         value = getattr(the_data, val)
                     except:
+                        # getattr default parameter doesn't work
+                        # it attempts to evaluate `the_data[val]` prematurely
                         value = the_data[val]
 
-                    setattr(trace, key, value)
+                    utils.rsetattr(trace, key, value, "_")
+
+                    # setattr(trace, key, value)
 
             # self.figure.update_layout(
             #     title="slicer cray" + str(self.meta) + str(timeSlider)
@@ -250,7 +260,7 @@ class PlotlyPriceChart:
         return handler
 
     def slider_meta_handler_factory(self):
-        @utils.debounce(1)
+        @utils.debounce(0.25)
         def handler(obj, meta):
             # if self.meta.timeSlider != meta.timeSlider:
             self.meta = {**self.meta, **meta}

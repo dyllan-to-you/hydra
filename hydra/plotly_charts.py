@@ -63,7 +63,7 @@ def data_resample_factory(
         # window_size = end_date - start_date
         # fakestart = start_date - window_size
         # fakeend = end_date + window_size
-        utils.write(f"resampling {traceIdx} {meta}")
+        # utils.write(f"resampling {traceIdx} {meta}")
         if metaHandler is not None and meta:
             _data = metaHandler(_data, figure, meta)
 
@@ -152,8 +152,7 @@ class PlotlyPriceChart:
         self.data_idx = 0
         self.meta = {"timeSlider": 50}
         self.handle_list = []
-        self.handler = self.handler_factory()
-        self.slider_handler = self.slider_handler_factory()
+        self.xaxis_handler = self.xaxis_handler_factory()
         self.slider_meta_handler = self.slider_meta_handler_factory()
         self.figure: go.FigureWidget = None
         self.startDate = startDate
@@ -185,10 +184,8 @@ class PlotlyPriceChart:
                 the_data = resample(
                     start_date, end_date, interval, trace_idx, self.figure, self.meta
                 )
-
-                # slider_handler
-                # if self.figure.layout.title.text is not None:
-                #     slider_input = int(self.figure.layout.title.text[0:2])
+                if the_data is None:
+                    continue
 
                 if timeSlider is not None:
                     slider_input = timeSlider
@@ -212,6 +209,10 @@ class PlotlyPriceChart:
             # self.figure.update_layout(
             #     title="slicer cray" + str(self.meta) + str(timeSlider)
             # )
+
+    # @utils.debounce(0.1)
+    def debounced_slicer(self, start, end):
+        self.slicer(start, end)
 
     def add_trace(
         self,
@@ -239,25 +240,17 @@ class PlotlyPriceChart:
             )
         self.data_idx += 1
 
-    def handler_factory(self):
+    # Handles Pan/Zoom changes
+    def xaxis_handler_factory(self):
         def handler(obj, xrange):
             [start, end] = xrange.range
             self.xrange = [start, end]
-            self.slicer(start, end)
-
-        return handler
-
-    def slider_handler_factory(self):
-        def handler(obj, title):
-            # utils.write("slidercall", title)
-            slider_input = int(title.text[0:2])
-            self.meta["timeSlider"] = slider_input
-            [start, end] = self.xrange
-            self.slicer(start, end)
+            self.debounced_slicer(start, end)
 
         return handler
 
     def slider_meta_handler_factory(self):
+        @utils.debounce(1)
         def handler(obj, meta):
             # if self.meta.timeSlider != meta.timeSlider:
             self.meta = {**self.meta, **meta}
@@ -265,15 +258,14 @@ class PlotlyPriceChart:
             self.figure.update_layout(title=str(self.meta))
 
             [start, end] = self.xrange
-            self.slicer(start, end)
+            self.debounced_slicer(start, end)
 
         return handler
 
     def register_handler(self, data):
         self.handle_list.append(data)
         self.slicer(self.startDate, self.endDate)
-        self.figure.layout.on_change(self.handler, "xaxis")
-        # self.figure.layout.on_change(self.slider_handler, "title")
+        self.figure.layout.on_change(self.xaxis_handler, "xaxis")
         self.figure.layout.on_change(self.slider_meta_handler, "meta")
 
     def generate_figure(self, pair, loc):

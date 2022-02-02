@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime
 from functools import wraps
 from timeit import default_timer as timer
@@ -137,3 +138,42 @@ def split_dupes(df: Union[pd.DataFrame, pd.Series]):
 
 def mem_used(total=psutil.virtual_memory().total):
     return total - psutil.virtual_memory().available
+
+
+def debounce(wait_time):
+    """
+    Decorator that will debounce a function so that it is called after wait_time seconds
+    If it is called multiple times, will wait for the last call to be debounced and run only this one.
+    See the test_debounce.py file for examples
+    """
+    write(f"Initializing debounced function {wait_time}ms")
+
+    def decorator(function):
+        write(f"Decorated {function.__name__}")
+
+        def debounced(*args, **kwargs):
+            debounced._counter += 1
+            write(f"{function.__name__} call #{debounced._counter}")
+
+            def call_function():
+                debounced._timer = None
+                write(f"!!! Debounced fn {function.__name__} executing")
+                debounced._counter = 0
+                return function(*args, **kwargs)
+
+            if debounced._timer is not None:
+                write(f"Timer is not none. Canceling old timer")
+                debounced._timer.cancel()
+
+            write(f"Initializing new timer")
+            debounced._timer = threading.Timer(wait_time, call_function)
+            write(f"Starting new timer")
+            debounced._timer.start()
+            write("Timer started!")
+
+        debounced._timer = None
+        debounced._counter = 0
+        return debounced
+
+    return decorator
+

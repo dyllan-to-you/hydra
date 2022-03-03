@@ -39,3 +39,7 @@ df1, df2 = parse(string)
 res = compareDfs((df1, df2))
 
 ```
+
+Write to terminal & log file
+`
+/home/larry/.cache/pypoetry/virtualenvs/hydra-Qraj0X5q-py3.8/bin/python -u /home/larry/Projects/hydra/hydra/EminemChunked.py ray 2>&1 | tee chunky-90-365.log`

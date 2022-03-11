@@ -18,11 +18,12 @@ from hydra.utils import flatten, mem_used, printd, timeme
 
 START_DATE = pd.to_datetime("2018-01-01 00:00:00")
 END_DATE = pd.to_datetime("2018-12-31 23:59:00")
+# END_DATE = pd.to_datetime("2018-12-31 23:59:00")
 SPAN = round((END_DATE - START_DATE) / pd.Timedelta(1, "day"))
 
-ROOT_WINDOW_DAYS = 7
+ROOT_WINDOW_DAYS = 90
 ROOT_WINDOW = ROOT_WINDOW_DAYS * 1440
-OVERLAP = 0.95
+OVERLAP = 0.99
 
 
 DEBUG = False
@@ -31,7 +32,7 @@ ABORT_ON_DUPLICATE = False
 RUN_SAVE_TEST = False
 
 CHUNK_SIZE = 60
-# CHUNK_SIZE = None
+# CHUNK_SIZE = 5
 
 SAVE_INTERVAL = pd.Timedelta(1, "minutes")
 MEMORY_TARGET = 0.2

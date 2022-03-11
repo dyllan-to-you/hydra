@@ -260,7 +260,7 @@ class PlotlyPriceChart:
         return handler
 
     def slider_meta_handler_factory(self):
-        @utils.debounce(0.25)
+        @utils.debounce(2)
         def handler(obj, meta):
             # if self.meta.timeSlider != meta.timeSlider:
             self.meta = {**self.meta, **meta}

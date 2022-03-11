@@ -1,5 +1,4 @@
 import path from "path";
-import * as dfd from "danfojs-node";
 import { MethodNotAllowed } from "@feathersjs/errors";
 import {
   Id,
@@ -60,52 +59,52 @@ const outputs = path.join(
   "*[!.xtrp].parq"
 );
 
-function danfo(): Promise<dfd.DataFrame> {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const db = new duckdb.Database(":memory:"); // or a file name for a persistent DB
+// function danfo(): Promise<dfd.DataFrame> {
+//   return new Promise((resolve, reject) => {
+//     const start = Date.now();
+//     const db = new duckdb.Database(":memory:"); // or a file name for a persistent DB
 
-    db.all(
-      `SELECT 
-        "minPerCycle",
-        "deviance",
-        "ifft_extrapolated_wavelength",
-        "ifft_extrapolated_amplitude",
-        "ifft_extrapolated_deviance",
-        "first_extrapolated",
-        "first_extrapolated_date",
-        "first_extrapolated_isup",
-        "startDate",
-        "endDate",
-        "window",
-        "window_original",
-        "trend_deviance",
-        "trend_slope",
-        "trend_intercept",
-        "rootNumber"
-      FROM parquet_scan(['${outputs}']);
-      `,
-      (err: any, res: any) => {
-        if (err) {
-          console.error("ERROR", err);
-          reject(err);
-        } else {
-          const df = new dfd.DataFrame(res, {}).setIndex({
-            column: "first_extrapolated_date",
-          });
-          console.log("Memory Load", (Date.now() - start) / 1000);
-          df.head(10).print();
+//     db.all(
+//       `SELECT
+//         "minPerCycle",
+//         "deviance",
+//         "ifft_extrapolated_wavelength",
+//         "ifft_extrapolated_amplitude",
+//         "ifft_extrapolated_deviance",
+//         "first_extrapolated",
+//         "first_extrapolated_date",
+//         "first_extrapolated_isup",
+//         "startDate",
+//         "endDate",
+//         "window",
+//         "window_original",
+//         "trend_deviance",
+//         "trend_slope",
+//         "trend_intercept",
+//         "rootNumber"
+//       FROM parquet_scan(['${outputs}']);
+//       `,
+//       (err: any, res: any) => {
+//         if (err) {
+//           console.error("ERROR", err);
+//           reject(err);
+//         } else {
+//           const df = new dfd.DataFrame(res, {}).setIndex({
+//             column: "first_extrapolated_date",
+//           });
+//           console.log("Memory Load", (Date.now() - start) / 1000);
+//           df.head(10).print();
 
-          const queryStart = Date.now();
-          const qResult = df.loc({ rows: [`2018-01-01:2018-02-01`] }); //df.query(df.index.gt('2018-01-01'))
-          console.log(qResult, (Date.now() - queryStart) / 1000);
+//           const queryStart = Date.now();
+//           const qResult = df.loc({ rows: [`2018-01-01:2018-02-01`] }); //df.query(df.index.gt('2018-01-01'))
+//           console.log(qResult, (Date.now() - queryStart) / 1000);
 
-          resolve(df);
-        }
-      }
-    );
-  });
-}
+//           resolve(df);
+//         }
+//       }
+//     );
+//   });
+// }
 
 function duckdbInit(
   path = ":memory:",

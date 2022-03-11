@@ -151,4 +151,8 @@ output/*
 *.json
 # *.ini
 profile.html
+scalene.html
 notebooks/log.txt
+
+# Rely on gitignore within js folder for that
+!js/**/*

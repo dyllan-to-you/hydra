@@ -7,7 +7,7 @@
     "max": 50
   },
   "sqlite": {
-    "client": "sqlite3",
+    "client": "better-sqlite3",
     "connection": {
       "filename": "hydra.sqlite"
     }

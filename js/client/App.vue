@@ -1,24 +1,28 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-import TheWelcome from './components/TheWelcome.vue'
+const links = [
+  { dest: "Sine", name: "SineWave" },
+  { dest: "Random", name: "RandomWalk" },
+  { dest: "Prices", name: "PricePrediction" },
+];
 </script>
 
 <template>
   <header>
-    <img alt="Vue logo" class="logo" src="./assets/logo.svg" width="125" height="125" />
-
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-    </div>
+    <template v-for="(link, idx) in links" :key="idx">
+      <span>
+        <router-link :to="{ name: link.dest }">{{ link.name }}</router-link>
+      </span>
+      <span v-if="idx < links.length - 1"> | </span>
+    </template>
   </header>
 
   <main>
-    <TheWelcome />
+    <router-view></router-view>
   </main>
 </template>
 
-<style>
-@import './assets/base.css';
+<!-- <style>
+@import "./assets/base.css";
 
 #app {
   max-width: 1280px;
@@ -78,4 +82,4 @@ a,
     margin: 0 2rem 0 0;
   }
 }
-</style>
+</style> -->

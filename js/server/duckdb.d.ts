@@ -3,6 +3,7 @@ declare module "duckdb" {
   class Database {
     constructor(path: string);
     each: (sql: string, cb: callback) => this;
+    run: (sql: string) => this;
     all: (sql: string, cb: callback) => this;
     exec: (sql: string, cb?: callback) => this;
     register: () => this;

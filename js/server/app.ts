@@ -16,6 +16,7 @@ import services from "./services";
 import appHooks from "./app.hooks";
 import channels from "./channels";
 import { HookContext as FeathersHookContext } from "@feathersjs/feathers";
+import knex from "./knex";
 // Don't remove this comment. It's needed to format import lines nicely.
 
 const app: Application = express(feathers());
@@ -42,6 +43,8 @@ app.use("/", express.static(app.get("public")));
 // Set up Plugins and providers
 app.configure(express.rest());
 app.configure(socketio());
+
+app.configure(knex);
 
 // Configure other middleware (see `middleware/index.ts`)
 app.configure(middleware);

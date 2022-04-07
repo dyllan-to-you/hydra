@@ -230,26 +230,26 @@ export class FftIndicator implements ServiceMethods<Data> {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async get(id: Id, params?: Params): Promise<Data> {
-    throw MethodNotAllowed;
+    throw new MethodNotAllowed("Invalid method for fft-indicator");
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async create(data: Data, params?: Params): Promise<Data> {
-    throw MethodNotAllowed;
+    throw new MethodNotAllowed("Invalid method for fft-indicator");
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async update(id: NullableId, data: Data, params?: Params): Promise<Data> {
-    throw MethodNotAllowed;
+    throw new MethodNotAllowed("Invalid method for fft-indicator");
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async patch(id: NullableId, data: Data, params?: Params): Promise<Data> {
-    throw MethodNotAllowed;
+    throw new MethodNotAllowed("Invalid method for fft-indicator");
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async remove(id: NullableId, params?: Params): Promise<Data> {
-    throw MethodNotAllowed;
+    throw new MethodNotAllowed("Invalid method for fft-indicator");
   }
 }

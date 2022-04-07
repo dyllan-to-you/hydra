@@ -1,5 +1,5 @@
-import app from "../../src/app";
-import { Data as FftIndicatorData } from "../../src/services/fft-indicator/fft-indicator.class";
+import app from "../../server/app";
+import { Data as FftIndicatorData } from "../../server/services/fft-indicator/fft-indicator.class";
 
 function getMax(arr: number[]) {
   let len = arr.length;
@@ -47,19 +47,19 @@ describe("'fft-indicator' service", () => {
             switch (op) {
               case "$gt":
                 expect(
-                  getMax(res.map((e) => new Date(e[prop]).getTime()))
+                  getMax(res.map((e: any) => new Date(e[prop]).getTime()))
                 ).toBeGreaterThan(new Date(val).getTime());
                 break;
               case "$lt":
                 expect(
-                  getMin(res.map((e) => new Date(e[prop]).getTime()))
+                  getMin(res.map((e: any) => new Date(e[prop]).getTime()))
                 ).toBeLessThan(new Date(val).getTime());
                 break;
             }
           });
           break;
         default:
-          res.forEach((e) => expect(e[prop]).toEqual(condition));
+          res.forEach((e: any) => expect(e[prop]).toEqual(condition));
       }
     });
   });
@@ -84,19 +84,19 @@ describe("'fft-indicator' service", () => {
             switch (op) {
               case "$gt":
                 expect(
-                  getMax(res.map((e) => new Date(e[prop]).getTime()))
+                  getMax(res.map((e: any) => new Date(e[prop]).getTime()))
                 ).toBeGreaterThan(new Date(val).getTime());
                 break;
               case "$lt":
                 expect(
-                  getMin(res.map((e) => new Date(e[prop]).getTime()))
+                  getMin(res.map((e: any) => new Date(e[prop]).getTime()))
                 ).toBeLessThan(new Date(val).getTime());
                 break;
             }
           });
           break;
         default:
-          res.forEach((e) => expect(e[prop]).toEqual(condition));
+          res.forEach((e: any) => expect(e[prop]).toEqual(condition));
       }
     });
   });
@@ -125,19 +125,19 @@ describe("'fft-indicator' service", () => {
             switch (op) {
               case "$gt":
                 expect(
-                  getMax(res.map((e) => new Date(e[prop]).getTime()))
+                  getMax(res.map((e: any) => new Date(e[prop]).getTime()))
                 ).toBeGreaterThan(new Date(val).getTime());
                 break;
               case "$lt":
                 expect(
-                  getMin(res.map((e) => new Date(e[prop]).getTime()))
+                  getMin(res.map((e: any) => new Date(e[prop]).getTime()))
                 ).toBeLessThan(new Date(val).getTime());
                 break;
             }
           });
           break;
         default:
-          res.forEach((e) => expect(e[prop]).toEqual(condition));
+          res.forEach((e: any) => expect(e[prop]).toEqual(condition));
       }
     });
   });

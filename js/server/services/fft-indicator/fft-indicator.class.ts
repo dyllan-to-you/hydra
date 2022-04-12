@@ -8,6 +8,7 @@ import {
   ServiceMethods,
 } from "@feathersjs/feathers";
 import duckdb from "duckdb";
+import { Knex } from "knex";
 import { Service as KnexService, KnexServiceOptions } from "feathers-knex";
 import { Application } from "../../declarations";
 
@@ -20,24 +21,6 @@ const outputs = path.join(
   "day=*",
   "*[!.xtrp].parq"
 );
-
-const METHODS = {
-  $or: "orWhere",
-  $and: "andWhere",
-  $ne: "whereNot",
-  $in: "whereIn",
-  $nin: "whereNotIn",
-};
-
-const OPERATORS: Record<string, string> = {
-  $lt: "<",
-  $lte: "<=",
-  $gt: ">",
-  $gte: ">=",
-  $like: "like",
-  $notlike: "not like",
-  $ilike: "ilike",
-};
 
 export interface Data {
   minPerCycle: any;
@@ -60,12 +43,8 @@ export interface Data {
 
 interface ServiceOptions {}
 
-function duckdbInit(
-  path = ":memory:",
-  exportTable = null
-): Promise<duckdb.Database> {
-  return new Promise(async (resolve, reject) => {
-    const db = new duckdb.Database(path);
+function duckdbInit(db: duckdb.Database, exportTable = null): Promise<true> {
+  return new Promise((resolve, reject) => {
     let query = `CREATE TABLE fft_indicator AS SELECT
       "minPerCycle",
       "deviance",
@@ -92,7 +71,7 @@ function duckdbInit(
       });
       `;
     }
-    db.exec(query, (err: any, res: any) => (err ? reject(err) : resolve(db)));
+    db.exec(query, (err: any, res: any) => (err ? reject(err) : resolve(true)));
   });
 }
 
@@ -100,9 +79,10 @@ export class FftIndicator implements ServiceMethods<Data> {
   app: Application;
   options: ServiceOptions;
   knexServ: KnexService;
-  db: Promise<duckdb.Database>;
+  db: duckdb.Database;
+  dbInitPromise: Promise<boolean>;
 
-  constructor(options: ServiceOptions = {}, app: Application) {
+  constructor(options: Partial<KnexServiceOptions>, app: Application) {
     this.options = options;
     this.app = app;
     this.knexServ = new KnexService({
@@ -112,72 +92,81 @@ export class FftIndicator implements ServiceMethods<Data> {
 
     console.log(outputs);
 
-    this.db = duckdbInit();
+    this.db = new duckdb.Database(":memory:");
+    this.dbInitPromise = duckdbInit(this.db);
   }
 
-  objConditionParser(
-    column: string,
-    condition: Record<keyof typeof OPERATORS, string | number> | string | number
-  ) {
-    if (typeof condition != "object") {
-      condition = { $eq: condition };
+  createQuery(params: Partial<Params> = {}) {
+    const { filters, query } = this.knexServ.filterQuery(params);
+    let q: Knex | Knex.QueryBuilder = this.knexServ.db(params);
+
+    // $select uses a specific find syntax, so it has to come first.
+    q = filters.$select // always select the id field, but make sure we only select it once
+      ? q.select([...new Set(filters.$select)])
+      : q.select([`*`]);
+
+    // build up the knex query out of the query params
+    // @ts-ignore: use untyped method
+    this.knexServ.knexify(q, query);
+
+    // Handle $sort
+    if (filters.$sort) {
+      Object.keys(filters.$sort).forEach((key) => {
+        q = q.orderBy(key, filters.$sort[key] === 1 ? "asc" : "desc");
+      });
     }
 
-    const clause = Object.entries(condition).map(([op, val]) => {
-      const operator = OPERATORS[op] ?? "=";
-      return `${column} ${operator} ${this.segmentParser(val)}`;
+    return q;
+  }
+
+  runQuery(query: string): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all(query, (err: any, res: any) => {
+        if (err) {
+          console.error(`Error:`, err);
+          reject(err);
+        }
+        resolve(res);
+      });
     });
-
-    console.log("parser", clause);
-    return `(${clause.join(" and ")})`;
-  }
-
-  segmentParser(value: any) {
-    switch (typeof value) {
-      case "string":
-        return `'${value}'`;
-      case "number":
-        return `${value}`;
-      default:
-        return value;
-    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async find(params?: Params): Promise<Data[] | Paginated<Data>> {
-    const { query } = params ?? {};
-    const { $select, ...remQueries } = query ?? {};
+    await this.dbInitPromise;
 
-    const select = $select ? $select.join(", ") : "*";
+    let resolution = 1;
 
-    let clause = Object.entries(remQueries)
-      .map((e) => {
-        const [prop, condition] = e;
-        console.log(prop, condition);
-        return this.objConditionParser(prop, condition);
-      })
-      .filter((e) => e != null)
-      .join(" AND ");
-
-    console.log("clause", clause);
-    if (clause == null || clause == "") {
-      clause = `first_extrapolated_date BETWEEN '2018-01-01' AND '2018-01-02'`;
+    if (params?.query?.resolution) {
+      resolution = params.query.resolution;
+      delete params.query.resolution;
     }
 
-    const connection = (await this.db).connect();
+    const query = this.createQuery(params);
 
-    const sqlQuery = `SELECT ${select} FROM fft_indicator WHERE ${clause}`;
-    console.debug(sqlQuery);
+    // if (params?.query?.timestamp == null) {
+    //   const now = new Date();
+    //   const then = new Date(now.getTime() - 60 * 60 * 1000);
+    //   query.whereBetween("timestamp", [then, now]);
+    // }
 
-    return new Promise((resolve, reject) => {
-      connection.all(sqlQuery, (err: Error, res: any[]) =>
-        err ? reject(err) : resolve(res)
-      );
-    });
+    const queryStr = query.toString().replace(/`/g, '"');
+
+    console.log(queryStr);
+    const result = await this.runQuery(queryStr);
+    // console.log(result);
+
+    // throw new MethodNotAllowed("Invalid method for prices");
+    return result;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async get(id: Id, params?: Params): Promise<Data> {
+  async get(id: string, params?: Params): Promise<Data> {
+    switch (id) {
+      case "info":
+      default:
+        break;
+    }
     throw new MethodNotAllowed("Invalid method for fft-indicator");
   }
 

@@ -13,7 +13,8 @@ declare module "../../declarations" {
 
 export default function (app: Application): void {
   const options = {
-    paginate: app.get("paginate"),
+    Model: app.get("knexClient"),
+    paginate: { default: undefined },
   };
 
   // Initialize our service with any options it requires

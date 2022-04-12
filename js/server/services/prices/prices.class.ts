@@ -30,8 +30,7 @@ export class Prices implements ServiceMethods<any> {
       name: "binance",
     });
 
-    const root = path.dirname(require?.main?.filename ?? "");
-    const dbPath = path.join(root, "../../data/prices.duckpq");
+    const dbPath = path.join(__dirname, "../../../../data/prices.duckpq");
     console.log(dbPath);
     this.db = new duckdb.Database(":memory:");
 

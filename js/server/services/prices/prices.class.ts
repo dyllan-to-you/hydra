@@ -19,20 +19,15 @@ const tickerMap = tickerPairs.reduce((a, e) => {
 export class Prices implements ServiceMethods<any> {
   app: Application;
 
-  binance: KnexService;
-  kraken: KnexService;
+  knexServ: KnexService;
 
   db: duckdb.Database;
   //eslint-disable-next-line @typescript-eslint/no-unused-vars
   constructor(options: Partial<KnexServiceOptions>, app: Application) {
     this.app = app;
-    this.binance = new KnexService({
+    this.knexServ = new KnexService({
       ...options,
       name: "binance",
-    });
-    this.kraken = new KnexService({
-      ...options,
-      name: "kraken",
     });
 
     const root = path.dirname(require?.main?.filename ?? "");
@@ -49,8 +44,8 @@ export class Prices implements ServiceMethods<any> {
   }
 
   createQuery(params: Partial<Params> = {}) {
-    const { filters, query } = this.binance.filterQuery(params);
-    let q: Knex | Knex.QueryBuilder = this.binance.db(params);
+    const { filters, query } = this.knexServ.filterQuery(params);
+    let q: Knex | Knex.QueryBuilder = this.knexServ.db(params);
 
     // $select uses a specific find syntax, so it has to come first.
     q = filters.$select // always select the id field, but make sure we only select it once
@@ -59,7 +54,7 @@ export class Prices implements ServiceMethods<any> {
 
     // build up the knex query out of the query params
     // @ts-ignore: use untyped method
-    this.binance.knexify(q, query);
+    this.knexServ.knexify(q, query);
 
     // Handle $sort
     if (filters.$sort) {
@@ -89,7 +84,6 @@ export class Prices implements ServiceMethods<any> {
     if (tickers == null) {
       throw new BadRequest("Invalid ticker " + id);
     }
-    const { binance: binanceTicker, kraken: krakenTicker } = tickers;
 
     let resolution = 1;
 
@@ -106,39 +100,63 @@ export class Prices implements ServiceMethods<any> {
       query.whereBetween("timestamp", [then, now]);
     }
 
-    const runQuery = (name: string, ticker: string) => {
-      const queryStr = query
-        .clone()
-        .from(name)
-        .where({ ticker })
-        .toString()
-        .replace(/`/g, '"');
-
-      console.log(queryStr);
-      return this.runQuery(queryStr);
-    };
-
     console.log("prices::get", id);
-    console.log(
-      "between",
-      await this.runQuery(
-        `SELECT DISTINCT ticker from kraken 
-        where "timestamp" > '2019-01-01' and "timestamp" < '2019-01-02' `
-      )
-    );
-    console.log(
-      "global",
-      await this.runQuery(`SELECT DISTINCT ticker from kraken`)
-    );
-    // console.log(
-    //   await this.runQuery(
-    //     `SELECT * from kraken ORDER BY timestamp DESC limit 1;`
-    //   )
-    // );
-    console.log((await runQuery("binance", binanceTicker)).length);
-    console.log((await runQuery("kraken", krakenTicker)).length);
 
-    throw new MethodNotAllowed("Invalid method for prices");
+    const queries = Object.entries(tickers).map(([name, ticker]) =>
+      query.clone().from(name).where({ ticker })
+    );
+    const [firstQuery, ...remQueries] = queries;
+    const unionQuery = firstQuery.unionAll(remQueries);
+
+    const resampled = this.knexServ.knex
+      .queryBuilder()
+      .with("unioned", unionQuery)
+      .with(
+        "resampled",
+        this.knexServ
+          .knex()
+          .select(
+            "timestamp",
+            this.knexServ.knex.raw(`
+          to_timestamp(
+            CAST(
+              floor(
+                EXTRACT(epoch FROM timestamp) 
+                / EXTRACT(epoch FROM interval '${resolution} minutes')
+              ) * EXTRACT(epoch FROM interval '${resolution} minutes') 
+            AS BIGINT)
+          ) as ts
+        `),
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
+          )
+          .from("unioned")
+          .orderBy("timestamp", "asc")
+      );
+
+    const fin = resampled
+      .select(
+        "ts",
+        this.knexServ.knex.raw("first(open) as open"),
+        this.knexServ.knex.raw("max(high) as high"),
+        this.knexServ.knex.raw("min(low) as low"),
+        this.knexServ.knex.raw("last(close) as close"),
+        this.knexServ.knex.raw("sum(volume) as volume")
+      )
+      .from("resampled")
+      .groupBy("ts");
+
+    const queryStr = fin.toString().replace(/`/g, '"');
+
+    console.log(queryStr);
+    const result = await this.runQuery(queryStr);
+    // console.log(result);
+
+    // throw new MethodNotAllowed("Invalid method for prices");
+    return result;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

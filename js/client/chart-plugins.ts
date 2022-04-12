@@ -39,7 +39,7 @@ export function columnHighlightPlugin({
     if (currIdx !== u.cursor.idx) {
       currIdx = u.cursor.idx;
 
-      let [iMin, iMax] = u.series[0].idxs;
+      const [iMin, iMax] = u.series[0].idxs;
 
       const dx = iMax - iMin;
       const width = u.bbox.width / dx / devicePixelRatio;
@@ -138,36 +138,37 @@ export function candlestickPlugin({
   shadowWidth = 2,
   bodyOutline = 1,
 } = {}) {
-  function drawCandles(u) {
+  function drawCandles(u: uPlot) {
     u.ctx.save();
 
     const offset = (shadowWidth % 2) / 2;
 
     u.ctx.translate(offset, offset);
 
-    let [iMin, iMax] = u.series[0].idxs;
+    const [iMin, iMax] = u.series[0].idxs;
 
-    let vol0AsY = u.valToPos(0, "vol", true);
+    const vol0AsY = u.valToPos(0, "vol", true);
 
     for (let i = iMin; i <= iMax; i++) {
-      let xVal = u.scales.x.distr == 2 ? i : u.data[0][i];
-      let open = u.data[1][i];
-      let high = u.data[2][i];
-      let low = u.data[3][i];
-      let close = u.data[4][i];
-      let vol = u.data[5][i];
+      const xVal = u.scales.x.distr == 2 ? i : u.data[0][i];
+      const open = u.data[1][i];
+      const high = u.data[2][i];
+      const low = u.data[3][i];
+      const close = u.data[4][i];
+      const vol = u.data[5][i];
 
-      let timeAsX = u.valToPos(xVal, "x", true);
-      let lowAsY = u.valToPos(low, "y", true);
-      let highAsY = u.valToPos(high, "y", true);
-      let openAsY = u.valToPos(open, "y", true);
-      let closeAsY = u.valToPos(close, "y", true);
-      let volAsY = u.valToPos(vol, "vol", true);
+      const timeAsX = u.valToPos(xVal, "x", true);
+      const lowAsY = u.valToPos(low, "y", true);
+      const highAsY = u.valToPos(high, "y", true);
+      const openAsY = u.valToPos(open, "y", true);
+      const closeAsY = u.valToPos(close, "y", true);
+      const volAsY = u.valToPos(vol, "vol", true);
 
       // shadow rect
-      let shadowHeight = Math.max(highAsY, lowAsY) - Math.min(highAsY, lowAsY);
-      let shadowX = timeAsX - shadowWidth / 2;
-      let shadowY = Math.min(highAsY, lowAsY);
+      const shadowHeight =
+        Math.max(highAsY, lowAsY) - Math.min(highAsY, lowAsY);
+      const shadowX = timeAsX - shadowWidth / 2;
+      const shadowY = Math.min(highAsY, lowAsY);
 
       u.ctx.fillStyle = shadowColor;
       u.ctx.fillRect(
@@ -178,13 +179,13 @@ export function candlestickPlugin({
       );
 
       // body rect
-      let columnWidth = u.bbox.width / (iMax - iMin);
-      let bodyWidth = Math.min(bodyMaxWidth, columnWidth - gap);
-      let bodyHeight =
+      const columnWidth = u.bbox.width / (iMax - iMin);
+      const bodyWidth = Math.min(bodyMaxWidth, columnWidth - gap);
+      const bodyHeight =
         Math.max(closeAsY, openAsY) - Math.min(closeAsY, openAsY);
-      let bodyX = timeAsX - bodyWidth / 2;
-      let bodyY = Math.min(closeAsY, openAsY);
-      let bodyColor = open > close ? bearishColor : bullishColor;
+      const bodyX = timeAsX - bodyWidth / 2;
+      const bodyY = Math.min(closeAsY, openAsY);
+      const bodyColor = open > close ? bearishColor : bullishColor;
 
       u.ctx.fillStyle = shadowColor;
       u.ctx.fillRect(
@@ -203,6 +204,7 @@ export function candlestickPlugin({
       );
 
       // volume rect
+      u.ctx.fillStyle = bodyColor + "40";
       u.ctx.fillRect(
         Math.round(bodyX),
         Math.round(volAsY),
@@ -233,6 +235,282 @@ export function candlestickPlugin({
     },
     hooks: {
       draw: drawCandles,
+    },
+  };
+}
+
+interface Position {
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  d: number;
+}
+
+export function touchZoomPlugin(opts: Record<string, any> = {}) {
+  function init(u: uPlot) {
+    const over = u.over;
+    let rect = over.getBoundingClientRect();
+    let oxRange, oyRange, xVal, yVal;
+    const fr: Position = { x: 0, y: 0, dx: 1, dy: 1, d: 1 };
+    const to: Position = { x: 0, y: 0, dx: 1, dy: 1, d: 1 };
+
+    function storePos(t: Position, e: TouchEvent) {
+      const ts = e.touches;
+
+      const t0 = ts[0];
+      const t0x = t0.clientX - rect.left;
+      const t0y = t0.clientY - rect.top;
+
+      // one touch = pan
+      if (ts.length == 1) {
+        t.x = t0x;
+        t.y = t0y;
+        t.d = t.dx = t.dy = 1;
+
+        // 2+ touch = zoom
+      } else {
+        const t1 = e.touches[1];
+        const t1x = t1.clientX - rect.left;
+        const t1y = t1.clientY - rect.top;
+
+        const xMin = Math.min(t0x, t1x);
+        const yMin = Math.min(t0y, t1y);
+        const xMax = Math.max(t0x, t1x);
+        const yMax = Math.max(t0y, t1y);
+
+        // midpts
+        t.y = (yMin + yMax) / 2;
+        t.x = (xMin + xMax) / 2;
+
+        t.dx = xMax - xMin;
+        t.dy = yMax - yMin;
+
+        // dist
+        t.d = Math.sqrt(t.dx * t.dx + t.dy * t.dy);
+      }
+    }
+
+    let rafPending = false;
+
+    function zoom() {
+      rafPending = false;
+
+      const left = to.x;
+      const top = to.y;
+
+      // non-uniform scaling
+      //	let xFactor = fr.dx / to.dx;
+      //	let yFactor = fr.dy / to.dy;
+
+      // uniform x/y scaling
+      const xFactor = fr.d / to.d;
+      const yFactor = fr.d / to.d;
+
+      const leftPct = left / rect.width;
+      const btmPct = 1 - top / rect.height;
+
+      const nxRange = oxRange * xFactor;
+      const nxMin = xVal - leftPct * nxRange;
+      const nxMax = nxMin + nxRange;
+
+      const nyRange = oyRange * yFactor;
+      const nyMin = yVal - btmPct * nyRange;
+      const nyMax = nyMin + nyRange;
+
+      u.batch(() => {
+        u.setScale("x", {
+          min: nxMin,
+          max: nxMax,
+        });
+
+        u.setScale("y", {
+          min: nyMin,
+          max: nyMax,
+        });
+
+        if (opts.loadData) {
+          opts.loadData(u, nxMin, nxMax);
+        }
+      });
+    }
+
+    function touchmove(e: TouchEvent) {
+      storePos(to, e);
+
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(zoom);
+      }
+    }
+
+    over.addEventListener("touchstart", function (e) {
+      rect = over.getBoundingClientRect();
+
+      storePos(fr, e);
+
+      oxRange = u.scales.x.max - u.scales.x.min;
+      oyRange = u.scales.y.max - u.scales.y.min;
+
+      const left = fr.x;
+      const top = fr.y;
+
+      xVal = u.posToVal(left, "x");
+      yVal = u.posToVal(top, "y");
+
+      document.addEventListener("touchmove", touchmove, { passive: true });
+    });
+
+    over.addEventListener("touchend", function (e: TouchEvent) {
+      document.removeEventListener("touchmove", touchmove);
+    });
+  }
+
+  return {
+    hooks: {
+      init,
+    },
+  };
+}
+
+enum MouseButton { // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button
+  Left = 0,
+  Primary = 0,
+  Middle = 1,
+  Auxiliary = 1,
+  Right = 2,
+  Secondary = 2,
+  Fourth = 3,
+  BrowserBack = 3,
+  Fifth = 4,
+  BrowserForward = 4,
+}
+
+export function wheelZoomPanPlugin(opts: Record<string, any> = {}) {
+  opts = { factor: 0.75, mouseButton: MouseButton.Middle, ...opts };
+  const factor = opts.factor || 0.75;
+
+  let xMin: number,
+    xMax: number,
+    yMin: number,
+    yMax: number,
+    xRange: number,
+    yRange: number;
+
+  function clamp(
+    nRange: number,
+    nMin: number,
+    nMax: number,
+    fRange: number,
+    fMin: number,
+    fMax: number
+  ) {
+    if (nRange > fRange) {
+      nMin = fMin;
+      nMax = fMax;
+    } else if (nMin < fMin) {
+      nMin = fMin;
+      nMax = fMin + nRange;
+    } else if (nMax > fMax) {
+      nMax = fMax;
+      nMin = fMax - nRange;
+    }
+
+    return [nMin, nMax];
+  }
+
+  return {
+    hooks: {
+      ready: (u: uPlot) => {
+        xMin = u.scales.x.min;
+        xMax = u.scales.x.max;
+        yMin = u.scales.y.min;
+        yMax = u.scales.y.max;
+
+        xRange = xMax - xMin;
+        yRange = yMax - yMin;
+
+        const over = u.over;
+        const rect = over.getBoundingClientRect();
+
+        // wheel drag pan
+        over.addEventListener("mousedown", (e) => {
+          if (e.button == opts.mouseButton) {
+            //	plot.style.cursor = "move";
+            e.preventDefault();
+
+            const left0 = e.clientX;
+            //	let top0 = e.clientY;
+
+            const scXMin0 = u.scales.x.min;
+            const scXMax0 = u.scales.x.max;
+
+            const xUnitsPerPx = u.posToVal(1, "x") - u.posToVal(0, "x");
+
+            const onmove = (e) => {
+              e.preventDefault();
+
+              const left1 = e.clientX;
+              //	let top1 = e.clientY;
+
+              const dx = xUnitsPerPx * (left1 - left0);
+
+              u.setScale("x", {
+                min: scXMin0 - dx,
+                max: scXMax0 - dx,
+              });
+            };
+
+            const onup = (e) => {
+              document.removeEventListener("mousemove", onmove);
+              document.removeEventListener("mouseup", onup);
+            };
+
+            document.addEventListener("mousemove", onmove);
+            document.addEventListener("mouseup", onup);
+          }
+        });
+
+        // wheel scroll zoom
+        over.addEventListener("wheel", (e) => {
+          e.preventDefault();
+
+          const { left, top } = u.cursor;
+
+          const leftPct = left / rect.width;
+          const btmPct = 1 - top / rect.height;
+          const xVal = u.posToVal(left, "x");
+          const yVal = u.posToVal(top, "y");
+          const oxRange = u.scales.x.max - u.scales.x.min;
+          const oyRange = u.scales.y.max - u.scales.y.min;
+
+          const nxRange = e.deltaY < 0 ? oxRange * factor : oxRange / factor;
+          let nxMin = xVal - leftPct * nxRange;
+          let nxMax = nxMin + nxRange;
+          [nxMin, nxMax] = clamp(nxRange, nxMin, nxMax, xRange, xMin, xMax);
+
+          const nyRange = e.deltaY < 0 ? oyRange * factor : oyRange / factor;
+          let nyMin = yVal - btmPct * nyRange;
+          let nyMax = nyMin + nyRange;
+          [nyMin, nyMax] = clamp(nyRange, nyMin, nyMax, yRange, yMin, yMax);
+
+          u.batch(() => {
+            u.setScale("x", {
+              min: nxMin,
+              max: nxMax,
+            });
+
+            u.setScale("y", {
+              min: nyMin,
+              max: nyMax,
+            });
+
+            if (opts.loadData) {
+              opts.loadData(u, nxMin, nxMax);
+            }
+          });
+        });
+      },
     },
   };
 }

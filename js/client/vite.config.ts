@@ -15,8 +15,11 @@ export default defineConfig({
       directoryAsNamespace: true,
       resolvers: [
         (name) => {
-          if (name === "Uplot") {
-            return { importName: "default", path: "uplot-vue" };
+          switch (name) {
+            case "Uplot":
+              return { importName: "default", path: "uplot-vue" };
+            default:
+              break;
           }
         },
       ],

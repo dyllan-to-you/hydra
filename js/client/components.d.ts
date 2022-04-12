@@ -14,6 +14,7 @@ declare module 'vue' {
     IconsIconEcosystem: typeof import('./components/icons/IconEcosystem.vue')['default']
     IconsIconSupport: typeof import('./components/icons/IconSupport.vue')['default']
     IconsIconTooling: typeof import('./components/icons/IconTooling.vue')['default']
+    LoadingBar: typeof import('./components/LoadingBar.vue')['default']
     PricePredictions: typeof import('./views/PricePredictions.vue')['default']
     RandomWalk: typeof import('./views/RandomWalk.vue')['default']
     Sine: typeof import('./views/Sine.vue')['default']

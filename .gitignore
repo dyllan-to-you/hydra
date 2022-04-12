@@ -147,6 +147,8 @@ csv/
 *.7z
 *.duck
 
+
+data/*
 output/*
 *.json
 # *.ini

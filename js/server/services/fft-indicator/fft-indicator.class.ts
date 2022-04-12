@@ -8,7 +8,18 @@ import {
   ServiceMethods,
 } from "@feathersjs/feathers";
 import duckdb from "duckdb";
+import { Service as KnexService, KnexServiceOptions } from "feathers-knex";
 import { Application } from "../../declarations";
+
+const outputSet = "enviro-chunky-90-365";
+const outputPath = path.resolve(__dirname, "../../../../output", outputSet);
+const outputs = path.join(
+  outputPath,
+  "year=*",
+  "month=*",
+  "day=*",
+  "*[!.xtrp].parq"
+);
 
 const METHODS = {
   $or: "orWhere",
@@ -49,63 +60,6 @@ export interface Data {
 
 interface ServiceOptions {}
 
-const outputSet = "enviro-chunky-90-365";
-const outputPath = path.resolve(__dirname, "../../../../output", outputSet);
-const outputs = path.join(
-  outputPath,
-  "year=*",
-  "month=*",
-  "day=*",
-  "*[!.xtrp].parq"
-);
-
-// function danfo(): Promise<dfd.DataFrame> {
-//   return new Promise((resolve, reject) => {
-//     const start = Date.now();
-//     const db = new duckdb.Database(":memory:"); // or a file name for a persistent DB
-
-//     db.all(
-//       `SELECT
-//         "minPerCycle",
-//         "deviance",
-//         "ifft_extrapolated_wavelength",
-//         "ifft_extrapolated_amplitude",
-//         "ifft_extrapolated_deviance",
-//         "first_extrapolated",
-//         "first_extrapolated_date",
-//         "first_extrapolated_isup",
-//         "startDate",
-//         "endDate",
-//         "window",
-//         "window_original",
-//         "trend_deviance",
-//         "trend_slope",
-//         "trend_intercept",
-//         "rootNumber"
-//       FROM parquet_scan(['${outputs}']);
-//       `,
-//       (err: any, res: any) => {
-//         if (err) {
-//           console.error("ERROR", err);
-//           reject(err);
-//         } else {
-//           const df = new dfd.DataFrame(res, {}).setIndex({
-//             column: "first_extrapolated_date",
-//           });
-//           console.log("Memory Load", (Date.now() - start) / 1000);
-//           df.head(10).print();
-
-//           const queryStart = Date.now();
-//           const qResult = df.loc({ rows: [`2018-01-01:2018-02-01`] }); //df.query(df.index.gt('2018-01-01'))
-//           console.log(qResult, (Date.now() - queryStart) / 1000);
-
-//           resolve(df);
-//         }
-//       }
-//     );
-//   });
-// }
-
 function duckdbInit(
   path = ":memory:",
   exportTable = null
@@ -145,24 +99,18 @@ function duckdbInit(
 export class FftIndicator implements ServiceMethods<Data> {
   app: Application;
   options: ServiceOptions;
-  // df: Promise<dfd.DataFrame>;
+  knexServ: KnexService;
   db: Promise<duckdb.Database>;
 
   constructor(options: ServiceOptions = {}, app: Application) {
     this.options = options;
     this.app = app;
+    this.knexServ = new KnexService({
+      ...options,
+      name: "fft_indicator",
+    });
 
-    /*
-      path.join(outputPath, "accumulated_parents.parq")
-      path.join(outputPath, "year=2018", "month=1", "day=1", "1.parq")
-      path.join(outputPath, "**", "*.parq")
-    */
     console.log(outputs);
-
-    // memory load into danfo
-    // this.df = danfo();
-
-    // this.db = Promise.resolve(new duckdb.Database(`${outputPath}-duckdb-parq`));
 
     this.db = duckdbInit();
   }

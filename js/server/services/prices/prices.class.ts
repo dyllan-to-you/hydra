@@ -6,7 +6,14 @@ import { Id, NullableId, Params, ServiceMethods } from "@feathersjs/feathers";
 import { Service as KnexService, KnexServiceOptions } from "feathers-knex";
 import { Application } from "../../declarations";
 
-type Data = any;
+interface Data {
+  ts: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
 
 const tickerPairs = [{ binance: "BTCUSD", kraken: "XBTUSD" }];
 const tickerMap = tickerPairs.reduce((a, e) => {

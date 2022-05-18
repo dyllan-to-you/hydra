@@ -23,22 +23,22 @@ const outputs = path.join(
 );
 
 export interface Data {
-  minPerCycle: any;
-  deviance: any;
-  ifft_extrapolated_wavelength: any;
-  ifft_extrapolated_amplitude: any;
-  ifft_extrapolated_deviance: any;
-  first_extrapolated: any;
-  first_extrapolated_date: any;
-  first_extrapolated_isup: any;
-  startDate: any;
-  endDate: any;
-  window: any;
-  window_original: any;
-  trend_deviance: any;
-  trend_slope: any;
-  trend_intercept: any;
-  rootNumber: any;
+  minPerCycle: number;
+  deviance: number;
+  ifft_extrapolated_wavelength: number;
+  ifft_extrapolated_amplitude: number;
+  ifft_extrapolated_deviance: number;
+  first_extrapolated: number;
+  first_extrapolated_date: Date;
+  first_extrapolated_isup: boolean;
+  startDate: Date;
+  endDate: Date;
+  window: number;
+  window_original: number;
+  trend_deviance: number;
+  trend_slope: number;
+  trend_intercept: number;
+  rootNumber: number;
 }
 
 interface ServiceOptions {}
@@ -106,7 +106,7 @@ export class FftIndicator implements ServiceMethods<Data> {
       : q.select([`*`]);
 
     // build up the knex query out of the query params
-    // @ts-ignore: use untyped method
+    // @ts-expect-error: use untyped method
     this.knexServ.knexify(q, query);
 
     // Handle $sort

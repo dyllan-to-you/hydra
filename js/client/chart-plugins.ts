@@ -1,5 +1,15 @@
 import uPlot from "uplot";
 
+const debounce = (callback: (...x: any[]) => void, wait: number) => {
+  let timeoutId: number = null;
+  return (...args: any[]) => {
+    window.clearTimeout(timeoutId);
+    timeoutId = window.setTimeout(() => {
+      callback(...args);
+    }, wait);
+  };
+};
+
 export function columnHighlightPlugin({
   className,
   style = { backgroundColor: "rgba(51,204,255,0.3)" },
@@ -72,6 +82,7 @@ export function legendAsTooltipPlugin({
   className,
   style = { backgroundColor: "rgba(255, 249, 196, 0.92)", color: "black" },
 } = {}) {
+  // TODO: Draw better tooltips for candles and predictions
   let legendEl;
 
   function init(u, opts) {
@@ -156,61 +167,111 @@ export function candlestickPlugin({
       const low = u.data[3][i];
       const close = u.data[4][i];
       const vol = u.data[5][i];
+      const extrapolated = u.data[6][i];
+      const extrapolatedIsup = u.data[7][i];
+      // const extrapolatedWavelength = u.data[8][i];
+      // const extrapolatedAmplitude = u.data[9][i];
+      const predictionMade = u.data[10][i];
+      // const projection = u.data[11][i];
 
-      const timeAsX = u.valToPos(xVal, "x", true);
-      const lowAsY = u.valToPos(low, "y", true);
-      const highAsY = u.valToPos(high, "y", true);
-      const openAsY = u.valToPos(open, "y", true);
-      const closeAsY = u.valToPos(close, "y", true);
-      const volAsY = u.valToPos(vol, "vol", true);
+      if (xVal != null && open != null) {
+        const timeAsX = u.valToPos(xVal, "x", true);
+        const lowAsY = u.valToPos(low, "y", true);
+        const highAsY = u.valToPos(high, "y", true);
+        const openAsY = u.valToPos(open, "y", true);
+        const closeAsY = u.valToPos(close, "y", true);
+        const volAsY = u.valToPos(vol, "vol", true);
+        const extrapolatedAsY = u.valToPos(extrapolated, "y", true);
 
-      // shadow rect
-      const shadowHeight =
-        Math.max(highAsY, lowAsY) - Math.min(highAsY, lowAsY);
-      const shadowX = timeAsX - shadowWidth / 2;
-      const shadowY = Math.min(highAsY, lowAsY);
+        // shadow rect
+        const shadowHeight =
+          Math.max(highAsY, lowAsY) - Math.min(highAsY, lowAsY);
+        const shadowX = timeAsX - shadowWidth / 2;
+        const shadowY = Math.min(highAsY, lowAsY);
 
-      u.ctx.fillStyle = shadowColor;
-      u.ctx.fillRect(
-        Math.round(shadowX),
-        Math.round(shadowY),
-        Math.round(shadowWidth),
-        Math.round(shadowHeight)
-      );
+        u.ctx.fillStyle = shadowColor;
+        u.ctx.fillRect(
+          Math.round(shadowX),
+          Math.round(shadowY),
+          Math.round(shadowWidth),
+          Math.round(shadowHeight)
+        );
 
-      // body rect
-      const columnWidth = u.bbox.width / (iMax - iMin);
-      const bodyWidth = Math.min(bodyMaxWidth, columnWidth - gap);
-      const bodyHeight =
-        Math.max(closeAsY, openAsY) - Math.min(closeAsY, openAsY);
-      const bodyX = timeAsX - bodyWidth / 2;
-      const bodyY = Math.min(closeAsY, openAsY);
-      const bodyColor = open > close ? bearishColor : bullishColor;
+        // body rect
+        const columnWidth = u.bbox.width / (iMax - iMin);
+        const bodyWidth = Math.min(bodyMaxWidth, columnWidth - gap);
+        const bodyHeight =
+          Math.max(closeAsY, openAsY) - Math.min(closeAsY, openAsY);
+        const bodyX = timeAsX - bodyWidth / 2;
+        const bodyY = Math.min(closeAsY, openAsY);
+        const bodyColor = open > close ? bearishColor : bullishColor;
 
-      u.ctx.fillStyle = shadowColor;
-      u.ctx.fillRect(
-        Math.round(bodyX),
-        Math.round(bodyY),
-        Math.round(bodyWidth),
-        Math.round(bodyHeight)
-      );
+        u.ctx.fillStyle = shadowColor;
+        u.ctx.fillRect(
+          Math.round(bodyX),
+          Math.round(bodyY),
+          Math.round(bodyWidth),
+          Math.round(bodyHeight)
+        );
 
-      u.ctx.fillStyle = bodyColor;
-      u.ctx.fillRect(
-        Math.round(bodyX + bodyOutline),
-        Math.round(bodyY + bodyOutline),
-        Math.round(bodyWidth - bodyOutline * 2),
-        Math.round(bodyHeight - bodyOutline * 2)
-      );
+        u.ctx.fillStyle = bodyColor;
+        u.ctx.fillRect(
+          Math.round(bodyX + bodyOutline),
+          Math.round(bodyY + bodyOutline),
+          Math.round(bodyWidth - bodyOutline * 2),
+          Math.round(bodyHeight - bodyOutline * 2)
+        );
 
-      // volume rect
-      u.ctx.fillStyle = bodyColor + "40";
-      u.ctx.fillRect(
-        Math.round(bodyX),
-        Math.round(volAsY),
-        Math.round(bodyWidth),
-        Math.round(vol0AsY - volAsY)
-      );
+        // volume rect
+        u.ctx.fillStyle = bodyColor + "40";
+        u.ctx.fillRect(
+          Math.round(bodyX),
+          Math.round(volAsY),
+          Math.round(bodyWidth),
+          Math.round(vol0AsY - volAsY)
+        );
+
+        if (extrapolated != null) {
+          // extrapolated marker
+          // the triangle
+          const triangleHeight = extrapolatedIsup ? -bodyWidth : bodyWidth;
+          u.ctx.beginPath();
+          u.ctx.moveTo(timeAsX, extrapolatedAsY);
+          u.ctx.lineTo(bodyX, extrapolatedAsY + triangleHeight);
+          u.ctx.lineTo(bodyX + bodyWidth, extrapolatedAsY + triangleHeight);
+          u.ctx.closePath();
+
+          // the outline
+          u.ctx.lineWidth = bodyOutline;
+          u.ctx.strokeStyle = shadowColor;
+          u.ctx.stroke();
+
+          /**
+          take projection and put into buckets. map buckets to color
+          when drawing triangles, use bucket color as fill
+          */
+
+          // the fill color
+          u.ctx.fillStyle = bodyColor;
+          u.ctx.fill();
+
+          // weird line thing
+          u.ctx.beginPath();
+          u.ctx.moveTo(timeAsX, extrapolatedAsY);
+          u.ctx.lineTo(u.valToPos(predictionMade, "x", true), extrapolatedAsY);
+          u.ctx.closePath();
+          // console.log(
+          //   "wat",
+          //   timeAsX,
+          //   extrapolatedAsY,
+          //   u.valToPos(predictionMade, "x", true),
+          //   extrapolatedAsY
+          // );
+          u.ctx.lineWidth = 2;
+          u.ctx.strokeStyle = shadowColor;
+          u.ctx.stroke();
+        }
+      }
     }
 
     u.ctx.translate(-offset, -offset);
@@ -228,7 +289,8 @@ export function candlestickPlugin({
         },
       });
 
-      opts.series.forEach((series) => {
+      opts.series.forEach((series, i) => {
+        if (i > 5) return;
         series.paths = () => null;
         series.points = { show: false };
       });
@@ -328,10 +390,6 @@ export function touchZoomPlugin(opts: Record<string, any> = {}) {
           min: nyMin,
           max: nyMax,
         });
-
-        if (opts.loadData) {
-          opts.loadData(u, nxMin, nxMax);
-        }
       });
     }
 
@@ -363,6 +421,9 @@ export function touchZoomPlugin(opts: Record<string, any> = {}) {
 
     over.addEventListener("touchend", function (e: TouchEvent) {
       document.removeEventListener("touchmove", touchmove);
+      if (opts.loadData) {
+        opts.loadData({ start: u.scales.x.min, end: u.scales.x.max }, u);
+      }
     });
   }
 
@@ -433,6 +494,11 @@ export function wheelZoomPanPlugin(opts: Record<string, any> = {}) {
         const over = u.over;
         const rect = over.getBoundingClientRect();
 
+        const wheelDebouncer = debounce(() => {
+          console.log("debouncey");
+          opts.loadData({ start: u.scales.x.min, end: u.scales.x.max }, u);
+        }, 50);
+
         // wheel drag pan
         over.addEventListener("mousedown", (e) => {
           if (e.button == opts.mouseButton) {
@@ -464,6 +530,12 @@ export function wheelZoomPanPlugin(opts: Record<string, any> = {}) {
             const onup = (e) => {
               document.removeEventListener("mousemove", onmove);
               document.removeEventListener("mouseup", onup);
+              if (opts.loadData) {
+                opts.loadData(
+                  { start: u.scales.x.min, end: u.scales.x.max },
+                  u
+                );
+              }
             };
 
             document.addEventListener("mousemove", onmove);
@@ -487,7 +559,16 @@ export function wheelZoomPanPlugin(opts: Record<string, any> = {}) {
           const nxRange = e.deltaY < 0 ? oxRange * factor : oxRange / factor;
           let nxMin = xVal - leftPct * nxRange;
           let nxMax = nxMin + nxRange;
-          [nxMin, nxMax] = clamp(nxRange, nxMin, nxMax, xRange, xMin, xMax);
+          console.log(
+            "wheelin",
+            nxRange,
+            [nxMin, nxMax],
+            clamp(nxRange, nxMin, nxMax, xRange, xMin, xMax),
+            xRange,
+            xMin,
+            xMax
+          );
+          // [nxMin, nxMax] = clamp(nxRange, nxMin, nxMax, xRange, xMin, xMax);
 
           const nyRange = e.deltaY < 0 ? oyRange * factor : oyRange / factor;
           let nyMin = yVal - btmPct * nyRange;
@@ -504,9 +585,8 @@ export function wheelZoomPanPlugin(opts: Record<string, any> = {}) {
               min: nyMin,
               max: nyMax,
             });
-
             if (opts.loadData) {
-              opts.loadData(u, nxMin, nxMax);
+              wheelDebouncer();
             }
           });
         });

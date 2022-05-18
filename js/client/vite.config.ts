@@ -13,16 +13,6 @@ export default defineConfig({
     Components({
       dirs: ["views", "components"],
       directoryAsNamespace: true,
-      resolvers: [
-        (name) => {
-          switch (name) {
-            case "Uplot":
-              return { importName: "default", path: "uplot-vue" };
-            default:
-              break;
-          }
-        },
-      ],
     }),
   ],
   resolve: {

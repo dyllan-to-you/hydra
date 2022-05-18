@@ -19,6 +19,7 @@ declare module 'vue' {
     RandomWalk: typeof import('./views/RandomWalk.vue')['default']
     Sine: typeof import('./views/Sine.vue')['default']
     SineWave: typeof import('./views/SineWave.vue')['default']
+    Slider: typeof import('@vueform/slider')['default']
     TheWelcome: typeof import('./components/TheWelcome.vue')['default']
     Uplot: typeof import('uplot-vue')['default']
     UplotVue: typeof import('uplot-vue')['default']

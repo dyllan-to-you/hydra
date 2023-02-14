@@ -59,7 +59,7 @@ export class Prices implements ServiceMethods<any> {
       : q.select([`*`]);
 
     // build up the knex query out of the query params
-    // @ts-ignore: use untyped method
+    // @ts-expect-error: use untyped method
     this.knexServ.knexify(q, query);
 
     // Handle $sort
@@ -119,8 +119,8 @@ export class Prices implements ServiceMethods<any> {
       .with("unioned", unionQuery)
       .with(
         "resampled",
-        this.knexServ
-          .knex()
+        this.knexServ.knex
+          .queryBuilder()
           .select(
             "timestamp",
             this.knexServ.knex.raw(`
@@ -157,7 +157,7 @@ export class Prices implements ServiceMethods<any> {
 
     const queryStr = fin.toString().replace(/`/g, '"');
 
-    console.log(queryStr);
+    // console.log(queryStr);
     const result = await this.runQuery(queryStr);
     // console.log(result);
 

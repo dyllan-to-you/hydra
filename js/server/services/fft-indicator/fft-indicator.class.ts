@@ -119,9 +119,11 @@ export class FftIndicator implements ServiceMethods<Data> {
     return q;
   }
 
-  runQuery(query: string): Promise<any[]> {
+  runQuery(query: Knex | Knex.QueryBuilder): Promise<any[]> {
+    const queryStr = query.toString().replace(/`/g, '"');
+    console.log("fft-indicator", queryStr);
     return new Promise((resolve, reject) => {
-      this.db.all(query, (err: any, res: any) => {
+      this.db.all(queryStr, (err: any, res: any) => {
         if (err) {
           console.error(`Error:`, err);
           reject(err);
@@ -150,22 +152,44 @@ export class FftIndicator implements ServiceMethods<Data> {
     //   query.whereBetween("timestamp", [then, now]);
     // }
 
-    const queryStr = query.toString().replace(/`/g, '"');
-
-    console.log(queryStr);
-    const result = await this.runQuery(queryStr);
+    const result = await this.runQuery(query);
     // console.log(result);
 
     // throw new MethodNotAllowed("Invalid method for prices");
     return result;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async get(id: string, params?: Params): Promise<Data> {
+  async get(id: string, params?: Params): Promise<any> {
     switch (id) {
       case "info":
-      default:
+      default: {
+        const [rootNumbers, wavelengths] = await Promise.all([
+          this.runQuery(
+            this.createQuery(params)
+              .clear("select")
+              .distinct("rootNumber")
+              .orderBy("rootNumber")
+          ).then((data) => data.map((row) => row["rootNumber"])),
+          this.runQuery(
+            this.createQuery(params)
+              .clear("select")
+              .distinct("ifft_extrapolated_wavelength")
+              .orderBy("ifft_extrapolated_wavelength")
+          ).then((data) =>
+            data.map((row) => row["ifft_extrapolated_wavelength"])
+          ),
+        ]);
+
+        // console.log({
+        //   rootNumbers,
+        //   wavelengths,
+        // });
+        return {
+          rootNumbers,
+          wavelengths,
+        };
         break;
+      }
     }
     throw new MethodNotAllowed("Invalid method for fft-indicator");
   }

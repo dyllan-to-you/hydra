@@ -15,11 +15,11 @@ from hydra.Environments import main as bulk_analysis
 from hydra.Environments import run_parallel
 from hydra.utils import printd, timeme
 
-START_DATE = pd.to_datetime("2018-01-01 00:00:00")
-END_DATE = pd.to_datetime("2018-01-14 23:59:00")
+START_DATE = pd.to_datetime("2019-01-01 00:00:00")
+END_DATE = pd.to_datetime("2019-01-31 23:59:00")
 SPAN = round((END_DATE - START_DATE) / pd.Timedelta(1, "day"))
 
-ROOT_WINDOW_DAYS = 7
+ROOT_WINDOW_DAYS = 90
 ROOT_WINDOW = ROOT_WINDOW_DAYS * 1440
 OVERLAP = 0.95
 

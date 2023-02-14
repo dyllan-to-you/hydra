@@ -62,7 +62,15 @@ const loadedData = ref(false);
 //   currentTimespan
 // })
 
-let rootWindow = ref([1, 1]);
+let rootWindowStart = ref(0);
+let rootWindowEnd = ref(1);
+let rootWindow = computed({
+  set: ([start, end]) => {
+    rootWindowStart.value = start;
+    rootWindowEnd.value = end;
+  },
+  get: () => [rootWindowStart.value, rootWindowEnd.value],
+});
 let rootWindowRange = computed(() => {
   if (rootWindow.value[1] <= rootWindow.value[0]) {
     return rootWindow.value[0];
@@ -71,12 +79,23 @@ let rootWindowRange = computed(() => {
   }
 });
 
-let wavelength = ref([0, 0]);
+let wavelengthStart = ref(0);
+let wavelengthEnd = ref(1);
+let wavelengthLog10 = computed({
+  set: ([start, end]) => {
+    wavelengthStart.value = 10 ** start;
+    wavelengthEnd.value = 10 ** end;
+  },
+  get: () => [
+    Math.log10(wavelengthStart.value),
+    Math.log10(wavelengthEnd.value),
+  ],
+});
 let wavelengthRange = computed(() => {
-  if (wavelength.value[1] <= wavelength.value[0]) {
-    return wavelength.value[0];
+  if (wavelengthEnd.value <= wavelengthStart.value) {
+    return wavelengthStart.value;
   } else {
-    return { $gte: wavelength.value[0], $lte: wavelength.value[1] };
+    return { $gte: wavelengthStart.value, $lte: wavelengthEnd.value };
   }
 });
 
@@ -112,7 +131,9 @@ async function loadData(
     dateRange,
     rangeMinutes,
     resolution,
+    "rootWindowRange",
     rootWindowRange.value,
+    "wavelengthRange",
     wavelengthRange.value
   );
   const pricePromise = api.service("prices").get("BTCUSD", {
@@ -121,6 +142,14 @@ async function loadData(
       resolution,
     },
   });
+
+  const fftInfoPromise: Promise<FFTIndicator[]> = api
+    .service("fft-indicator")
+    .get("info", {
+      query: {
+        first_extrapolated_date: { $gt: dateRange.start, $lt: dateRange.end },
+      },
+    });
 
   const fftPromise: Promise<FFTIndicator[]> = api
     .service("fft-indicator")
@@ -133,7 +162,11 @@ async function loadData(
     });
 
   useProgress().attach(pricePromise);
+  useProgress().attach(fftInfoPromise);
   useProgress().attach(fftPromise);
+
+  fftInfo.value = await fftInfoPromise;
+  console.log("INFO", fftInfo.value);
 
   const priceDf = new dfd.DataFrame(
     (await pricePromise).map((e) => {
@@ -144,7 +177,18 @@ async function loadData(
     })
   );
   console.log("prices", priceDf);
-
+  console.log(
+    "fftPromise",
+    "full",
+    await api.service("fft-indicator").find({
+      query: {
+        rootNumber: rootWindowRange.value,
+        ifft_extrapolated_wavelength: wavelengthRange.value,
+      },
+    }),
+    "partial",
+    await fftPromise
+  );
   const fftDf = new dfd.DataFrame(
     (await fftPromise).map((e) => {
       const ts = new Date(e.first_extrapolated_date).getTime() / 1000;
@@ -238,9 +282,28 @@ async function loadData(
   return dataset.value;
 }
 
+const fftInfo = ref({ rootNumbers: [], wavelengths: [] });
+const fftMetaInfo = ref({
+  rootNumbers: { min: 0, max: 0 },
+  wavelengths: { min: 0, max: 0 },
+});
+
 // let initialLoad = ref(false);
 onMounted(async () => {
   await loadData(originalTimespan);
+  const results = await api.service("fft-indicator").get("info", {
+    query: {},
+  });
+  console.log("Initializing metainfo", results);
+  fftMetaInfo.value.rootNumbers = {
+    min: Math.min(...results.rootNumbers),
+    max: Math.max(...results.rootNumbers),
+  };
+  fftMetaInfo.value.wavelengths = {
+    min: Math.min(...results.wavelengths),
+    max: Math.max(...results.wavelengths),
+  };
+  console.log("Initialized metainfo", fftMetaInfo.value);
 });
 
 const options: uPlot.Options = {
@@ -347,6 +410,11 @@ function onCreate(chart: uPlot) {
 function onDelete(chart: uPlot) {
   console.log("Deleted from render fn");
 }
+
+function test(x) {
+  console.log("test", x);
+  return x;
+}
 </script>
 
 <template>
@@ -360,8 +428,91 @@ function onDelete(chart: uPlot) {
     @delete="onDelete"
     @create="onCreate"
   />
-  <h3>Root Window: {{ rootWindow }}</h3>
-  <vueform-slider v-model="rootWindow"></vueform-slider>
-  <h3>Wavelength: {{ wavelength }}</h3>
-  <vueform-slider v-model="wavelength"></vueform-slider>
+  <v-card>
+    <v-card-title
+      >Root Window: {{ rootWindow[0] }} - {{ rootWindow[1] }}</v-card-title
+    >
+    <v-card-text>
+      <v-row>
+        <v-range-slider
+          v-model="rootWindow"
+          :min="fftMetaInfo.rootNumbers?.min"
+          :max="fftMetaInfo.rootNumbers?.max"
+          step="1"
+          :ticks="fftInfo.rootNumbers"
+          show-ticks="always"
+          tick-size="5"
+          track-size="12"
+          strict
+        >
+          <template v-slot:prepend>
+            <v-text-field
+              v-model="rootWindowStart"
+              hide-details
+              single-line
+              type="number"
+              variant="outlined"
+              density="compact"
+              :error="!fftInfo.rootNumbers.includes(rootWindowStart)"
+            ></v-text-field>
+          </template>
+          <template v-slot:append>
+            <v-text-field
+              v-model="rootWindowEnd"
+              hide-details
+              single-line
+              type="number"
+              variant="outlined"
+              density="compact"
+              :error="!fftInfo.rootNumbers.includes(rootWindow[1])"
+            ></v-text-field>
+          </template>
+        </v-range-slider>
+      </v-row>
+    </v-card-text>
+  </v-card>
+  <v-card>
+    <v-card-title>
+      Wavelength:
+      {{ wavelengthStart }} -
+      {{ wavelengthEnd }}
+    </v-card-title>
+    <v-card-text>
+      <v-row>
+        <v-range-slider
+          v-model="wavelengthLog10"
+          :min="Math.log10(fftMetaInfo.wavelengths?.min || 10)"
+          :max="Math.log10(fftMetaInfo.wavelengths?.max)"
+          :ticks="fftInfo.wavelengths.map((e) => Math.log10(e || 10))"
+          show-ticks="always"
+          tick-size="5"
+          track-size="12"
+          strict
+        >
+          <template v-slot:prepend>
+            <v-text-field
+              v-model.number="wavelengthStart"
+              :error="!fftInfo.wavelengths.includes(wavelengthStart)"
+              hide-details
+              single-line
+              type="number"
+              variant="outlined"
+              density="compact"
+            ></v-text-field>
+          </template>
+          <template v-slot:append>
+            <v-text-field
+              v-model.number="wavelengthEnd"
+              :error="!fftInfo.wavelengths.includes(wavelengthEnd)"
+              hide-details
+              single-line
+              type="number"
+              variant="outlined"
+              density="compact"
+            ></v-text-field>
+          </template>
+        </v-range-slider>
+      </v-row>
+    </v-card-text>
+  </v-card>
 </template>

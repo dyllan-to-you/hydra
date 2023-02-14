@@ -256,20 +256,20 @@ export function candlestickPlugin({
           u.ctx.fill();
 
           // weird line thing
-          u.ctx.beginPath();
-          u.ctx.moveTo(timeAsX, extrapolatedAsY);
-          u.ctx.lineTo(u.valToPos(predictionMade, "x", true), extrapolatedAsY);
-          u.ctx.closePath();
-          // console.log(
-          //   "wat",
-          //   timeAsX,
-          //   extrapolatedAsY,
-          //   u.valToPos(predictionMade, "x", true),
-          //   extrapolatedAsY
-          // );
-          u.ctx.lineWidth = 2;
-          u.ctx.strokeStyle = shadowColor;
-          u.ctx.stroke();
+          // u.ctx.beginPath();
+          // u.ctx.moveTo(timeAsX, extrapolatedAsY);
+          // u.ctx.lineTo(u.valToPos(predictionMade, "x", true), extrapolatedAsY);
+          // u.ctx.closePath();
+          // // console.log(
+          // //   "wat",
+          // //   timeAsX,
+          // //   extrapolatedAsY,
+          // //   u.valToPos(predictionMade, "x", true),
+          // //   extrapolatedAsY
+          // // );
+          // u.ctx.lineWidth = 2;
+          // u.ctx.strokeStyle = shadowColor;
+          // u.ctx.stroke();
         }
       }
     }
@@ -559,15 +559,15 @@ export function wheelZoomPanPlugin(opts: Record<string, any> = {}) {
           const nxRange = e.deltaY < 0 ? oxRange * factor : oxRange / factor;
           let nxMin = xVal - leftPct * nxRange;
           let nxMax = nxMin + nxRange;
-          console.log(
-            "wheelin",
-            nxRange,
-            [nxMin, nxMax],
-            clamp(nxRange, nxMin, nxMax, xRange, xMin, xMax),
-            xRange,
-            xMin,
-            xMax
-          );
+          // console.log(
+          //   "wheelin",
+          //   nxRange,
+          //   [nxMin, nxMax],
+          //   clamp(nxRange, nxMin, nxMax, xRange, xMin, xMax),
+          //   xRange,
+          //   xMin,
+          //   xMax
+          // );
           // [nxMin, nxMax] = clamp(nxRange, nxMin, nxMax, xRange, xMin, xMax);
 
           const nyRange = e.deltaY < 0 ? oyRange * factor : oyRange / factor;
